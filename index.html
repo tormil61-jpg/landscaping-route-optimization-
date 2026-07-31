@@ -1507,13 +1507,13 @@ function updateSchedulePreview(){
   if(S.schedMode==='sqft'){
     var sqftCol=document.getElementById('cSqft')?document.getElementById('cSqft').value:'';
     var totalSqft=sqftCol!==''?rows.reduce(function(s,r){return s+(parseFloat(r[parseInt(sqftCol)])||0);},0):0;
-    var minCap=Math.min.apply(null,selDrvs.map(function(d){return S.sqftMap[d.id]||50000;}));
-    var sqftPerDay=minCap*selDrvs.length;
-    var days=totalSqft>0?Math.ceil(totalSqft/sqftPerDay):Math.ceil(total/selDrvs.length);
+    var totalCap=selDrvs.reduce(function(s,d){return s+(S.sqftMap[d.id]||50000);},0);
+    var days=totalSqft>0?Math.ceil(totalSqft/totalCap):Math.ceil(total/selDrvs.length);
     var weeks=Math.ceil(days/4);
-    el.innerHTML='<strong>'+total+' properties</strong>'+(totalSqft>0?' · <strong>'+Math.round(totalSqft/1000)+'k sq ft total</strong>':'')+' across <strong>'+selDrvs.length+' driver'+(selDrvs.length>1?'s':'')+' </strong>'
-      +' · <strong>'+(minCap/1000)+'k sq ft/driver/day</strong> · Fills <strong>'+days+' days</strong> (~'+weeks+' week'+(weeks>1?'s':'')+')'
+    var drvBreakdown=selDrvs.map(function(d){return d.name+': '+((S.sqftMap[d.id]||50000)/1000)+'k sq ft';}).join(' · ');
+    el.innerHTML='<strong>'+total+' properties</strong>'+(totalSqft>0?' · <strong>'+Math.round(totalSqft/1000)+'k sq ft total</strong>':'')+' · Fills <strong>'+days+' days</strong> (~'+weeks+' week'+(weeks>1?'s':'')+')'
       +(startDate?' starting <strong>'+startDate+'</strong>':'')
+      +'<br><span style="font-size:10px;color:#6b7280">'+drvBreakdown+'</span>'
       +(totalSqft===0?'<br><span style="color:#D97706">⚠ Select the square footage column above for accurate scheduling</span>':'');
   } else {
     var lim=Math.min.apply(null,selDrvs.map(function(d){return S.limMap[d.id]||d.daily_stop_limit||15;}));
@@ -1665,7 +1665,6 @@ async function doImport(){
     selDrvs.forEach(function(d){lims[d.id]=S.limMap[d.id]||d.daily_stop_limit||15;});
     var minLim=Math.min.apply(null,selDrvs.map(function(d){return lims[d.id];}));
   }
-
   // Filter by service type if drivers have specific codes
   // (e.g. LHT drivers get LHT stops, ORN drivers get ORN stops)
   var svcFiltered=geoItems;
