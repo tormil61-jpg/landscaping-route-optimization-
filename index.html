@@ -342,7 +342,8 @@ textarea{resize:vertical;min-height:60px}
           </div>
           <div class="fg">
             <label class="fl">Addresses — one per line (max 15)</label>
-            <textarea id="qrAddresses" style="height:320px;font-size:12px;line-height:1.7;resize:vertical" placeholder="704 Baerwald Rd, Gainesville, FL 32606&#10;8982 SW 73rd Ln, Gainesville, FL 32608&#10;7983 SW 80th Ln, Gainesville, FL 32608&#10;...paste your addresses here"></textarea>
+            <div style="font-size:10px;color:#6b7280;margin-bottom:4px">Paste full addresses including city and state for best results. If all addresses are in the same city, partial addresses work too.</div>
+            <textarea id="qrAddresses" style="height:300px;font-size:12px;line-height:1.7;resize:vertical" placeholder="704 Baerwald Rd, Gainesville, FL 32606&#10;8982 SW 73rd Ln, Gainesville, FL 32608&#10;7983 SW 80th Ln, Gainesville, FL 32608&#10;&#10;— or short form if same city —&#10;704 Baerwald Rd&#10;8982 SW 73rd Ln&#10;7983 SW 80th Ln"></textarea>
           </div>
           <div id="qrStats" style="display:none;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:10px"></div>
           <div id="qrList" style="display:none"></div>
@@ -2102,10 +2103,18 @@ async function runQuickRoute(){
 
   toast('Geocoding '+lines.length+' addresses...');
 
+  // Use active department for city/state context if available
+  var deptId=S.activeDept||( S.depts.length?S.depts[0].id:null);
+
   // Geocode all addresses
   var stops=[];
   for(var i=0;i<lines.length;i++){
-    var g=await geocodeAddr(lines[i],null);
+    var addr=lines[i];
+    // If address has no state/city info, append dept city/state
+    if(!/,\s*[A-Za-z]{2,}/.test(addr)&&deptId){
+      addr=addr+', '+getCityState(deptId);
+    }
+    var g=await geocodeAddr(addr,deptId);
     stops.push({address:lines[i],lat:g?g.lat:null,lng:g?g.lng:null,idx:i});
     await sleep(100);
   }
@@ -2113,7 +2122,7 @@ async function runQuickRoute(){
   var geocoded=stops.filter(function(s){return s.lat&&s.lng;});
   var failed=stops.filter(function(s){return!s.lat||!s.lng;});
 
-  if(!geocoded.length){toast('Could not geocode any addresses. Check format.','err');return;}
+  if(!geocoded.length){toast('Could not find any addresses. Make sure each address is on its own line. Example: 704 Baerwald Rd, Gainesville, FL 32606','err');return;}
   if(failed.length)toast(failed.length+' addresses could not be geocoded and were skipped');
 
   // Geocode start point if provided
