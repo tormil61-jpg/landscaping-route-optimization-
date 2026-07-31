@@ -375,7 +375,7 @@ textarea{resize:vertical;min-height:60px}
     <div class="page" id="page-drvs">
       <div class="phdr"><div><h1>Drivers</h1></div><button class="btn" onclick="openDrvModal()">+ Add Driver</button></div>
       <div style="background:#fff;border:1px solid #E2E5EA;border-radius:8px;overflow:hidden">
-        <table class="dt"><thead><tr><th>Name</th><th>Dept</th><th>Zone</th><th>Services</th><th>Property</th><th>Limit</th><th>Actions</th></tr></thead>
+        <table class="dt"><thead><tr><th>Name</th><th>Dept</th><th>Zone</th><th>Services</th><th>Property</th><th>Stops/Day</th><th>Sq Ft/Day</th><th>Actions</th></tr></thead>
         <tbody id="drvTbl"></tbody></table>
       </div>
     </div>
@@ -446,8 +446,20 @@ textarea{resize:vertical;min-height:60px}
       </div>
     </div>
     <div class="fr2">
+    <div class="fr2">
       <div class="fg"><label class="fl">Min/Stop</label><input type="number" id="drvTime" value="60" min="5"></div>
-      <div class="fg"><label class="fl">Daily Limit</label><input type="number" id="drvLimit" value="15" min="1" max="50"></div>
+      <div class="fg"><label class="fl">Daily Stop Limit</label><input type="number" id="drvLimit" value="15" min="1" max="50"></div>
+    </div>
+    <div class="fg"><label class="fl">Daily Sq Ft Capacity</label>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:5px">
+        <button class="btn2 bsm" onclick="document.getElementById('drvSqft').value=30000">30k</button>
+        <button class="btn2 bsm" onclick="document.getElementById('drvSqft').value=50000">50k</button>
+        <button class="btn2 bsm" onclick="document.getElementById('drvSqft').value=75000">75k</button>
+        <button class="btn2 bsm" onclick="document.getElementById('drvSqft').value=100000">100k</button>
+      </div>
+      <input type="number" id="drvSqft" value="50000" min="1000" max="500000" step="5000">
+      <div style="font-size:10px;color:#6b7280;margin-top:2px">Used when scheduling by square footage instead of stop count</div>
+    </div>
     </div>
     <div class="fg"><label class="fl">Colour</label><div class="cpick" id="drvCpick"></div></div>
     <input type="hidden" id="drvEditId">
@@ -999,7 +1011,7 @@ function renderDrvTable(){
   if(!S.drvs.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#9CA3AF;padding:20px">No drivers yet</td></tr>';return;}
   tb.innerHTML=S.drvs.map(function(d){
     var dept=S.depts.find(function(x){return x.id===d.department_id;});
-    return '<tr><td><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div></td><td><span class="b bg">'+(dept?dept.name:'-')+'</span></td><td>'+(d.zone||'-')+'</td><td>'+(d.service_type_codes||[]).join(', ')||'-'+'</td><td>'+(d.property_types||[]).map(function(p){return p.charAt(0).toUpperCase()+p.slice(1);}).join(', ')||'-'+'</td><td>'+d.daily_stop_limit+'</td><td><div style="display:flex;gap:3px"><button class="btn2 bsm" onclick="editDrv("+d.id+")">Edit</button><button class="btnd" onclick="delDrv("+d.id+")">x</button></div></td></tr>';
+    return '<tr><td><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div></td><td><span class="b bg">'+(dept?dept.name:'-')+'</span></td><td>'+(d.zone||'-')+'</td><td>'+(d.service_type_codes||[]).join(', ')||'-'+'</td><td>'+(d.property_types||[]).map(function(p){return p.charAt(0).toUpperCase()+p.slice(1);}).join(', ')||'-'+'</td><td>'+d.daily_stop_limit+'</td><td>'+((d.sqft_capacity||50000)/1000)+'k</td><td><div style="display:flex;gap:3px"><button class="btn2 bsm" onclick="editDrv(\''+d.id+'\')">Edit</button><button class="btnd" onclick="delDrv(\''+d.id+'\')">x</button></div></td></tr>';
   }).join('');
 }
 function openDrvModal(){
@@ -1010,6 +1022,7 @@ function openDrvModal(){
   document.getElementById('drvSvc').value='';
   document.getElementById('drvTime').value=60;
   document.getElementById('drvLimit').value=15;
+  document.getElementById('drvSqft').value=50000;
   document.getElementById('ptCom').checked=false;
   document.getElementById('ptRes').checked=false;
   S.selColor=COLORS[S.drvs.length%COLORS.length];
@@ -1024,6 +1037,7 @@ async function editDrv(id){
   document.getElementById('drvSvc').value=(d.service_type_codes||[]).join(', ');
   document.getElementById('drvTime').value=d.time_per_stop_minutes;
   document.getElementById('drvLimit').value=d.daily_stop_limit;
+  document.getElementById('drvSqft').value=d.sqft_capacity||50000;
   document.getElementById('ptCom').checked=(d.property_types||[]).includes('commercial');
   document.getElementById('ptRes').checked=(d.property_types||[]).includes('residential');
   S.selColor=d.color||COLORS[0];
@@ -1036,7 +1050,7 @@ async function saveDrv(){
   if(document.getElementById('ptCom').checked)pts.push('commercial');
   if(document.getElementById('ptRes').checked)pts.push('residential');
   var codes=document.getElementById('drvSvc').value.split(',').map(function(s){return s.trim().toUpperCase();}).filter(Boolean);
-  var data={name:name,zone:document.getElementById('drvZone').value.trim(),department_id:document.getElementById('drvDept').value||null,property_types:pts,service_type_codes:codes,time_per_stop_minutes:parseInt(document.getElementById('drvTime').value)||60,daily_stop_limit:parseInt(document.getElementById('drvLimit').value)||15,color:S.selColor,owner_id:ownerId()};
+  var data={name:name,zone:document.getElementById('drvZone').value.trim(),department_id:document.getElementById('drvDept').value||null,property_types:pts,service_type_codes:codes,time_per_stop_minutes:parseInt(document.getElementById('drvTime').value)||60,daily_stop_limit:parseInt(document.getElementById('drvLimit').value)||15,sqft_capacity:parseInt(document.getElementById('drvSqft').value)||50000,color:S.selColor,owner_id:ownerId()};
   var eid=document.getElementById('drvEditId').value;
   if(eid)await dbPatch('drivers','id=eq.'+eid,data);
   else await dbInsert('drivers',data);
@@ -1576,7 +1590,7 @@ function processFile(file){
     var drvs=did?S.drvs.filter(function(d){return d.department_id===did;}):S.drvs;
     document.getElementById('limEditor').innerHTML=drvs.map(function(d){
       var isSqft=S.schedMode==='sqft';
-      var defVal=isSqft?(S.sqftMap[d.id]||50000):(S.limMap[d.id]||d.daily_stop_limit);
+      var defVal=isSqft?(S.sqftMap[d.id]||d.sqft_capacity||50000):(S.limMap[d.id]||d.daily_stop_limit);
       var minV=isSqft?1000:1;var maxV=isSqft?200000:50;var stepV=isSqft?5000:1;
       return'<div class="slrow"><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div>'
         +(isSqft?'<div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn2 bsm" onclick="setSqftLimit(\''+d.id+'\',30000)">30k</button><button class="btn2 bsm" onclick="setSqftLimit(\''+d.id+'\',50000)">50k</button><button class="btn2 bsm" onclick="setSqftLimit(\''+d.id+'\',75000)">75k</button></div>':'')
@@ -1659,7 +1673,7 @@ async function doImport(){
   // Get capacity per driver based on mode
   var lims={};
   if(S.schedMode==='sqft'){
-    selDrvs.forEach(function(d){lims[d.id]=S.sqftMap[d.id]||50000;});
+    selDrvs.forEach(function(d){lims[d.id]=S.sqftMap[d.id]||d.sqft_capacity||50000;});
     var minLim=Math.min.apply(null,selDrvs.map(function(d){return lims[d.id];}));
   } else {
     selDrvs.forEach(function(d){lims[d.id]=S.limMap[d.id]||d.daily_stop_limit||15;});
