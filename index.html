@@ -258,7 +258,6 @@ textarea{resize:vertical;min-height:60px}
   <div class="ni" onclick="showPage('duesoon',this)">⏰ Due Soon</div>
   <div class="nsec">Management</div>
   <div class="ni" onclick="showPage('depts',this)">🏢 Departments</div>
-  <div class="ni" onclick="showPage('drvs',this)">👷 Drivers</div>
   <div class="ni" onclick="showPage('clients',this)">🏠 Clients</div>
   <div class="ni admin-only" onclick="openModal('userMo');renderUserList()" style="display:none">👥 Users</div>
   <div class="ni" onclick="doLogout()" style="margin-top:auto;color:#fca5a5">🔒 Sign Out</div>
@@ -917,29 +916,51 @@ function updateDepotTxt(){
 }
 function renderDeptCards(){
   var el=document.getElementById('deptCards');
-  if(!S.depts.length){el.innerHTML='<div class="empty"><p>No departments yet</p></div>';return;}
+  if(!S.depts.length){el.innerHTML='<div class="empty"><p>No departments yet. Add one to get started.</p></div>';return;}
   var html='';
   S.depts.forEach(function(dept){
     var drvs=S.drvs.filter(function(d){return d.department_id===dept.id;});
     var rows='';
     drvs.forEach(function(d){
-      rows+='<tr><td><strong>'+d.name+'</strong></td><td>'+(d.zone||'-')+'</td><td>'+((d.service_type_codes||[]).join(',')||'-')+'</td><td>'+d.daily_stop_limit+'</td>';
-      rows+='<td><button class="btn2 bsm" data-a="editDrv" data-id="'+d.id+'">Edit</button> <button class="btnd" data-a="delDrv" data-id="'+d.id+'">x</button></td></tr>';
+      rows+='<tr>'
+        +'<td><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div></td>'
+        +'<td style="font-size:11px;color:#6b7280">'+(d.zone||'-')+'</td>'
+        +'<td>'+((d.service_type_codes||[]).map(function(c){return'<span class="b bb">'+c+'</span>';}).join(' ')||'-')+'</td>'
+        +'<td style="text-align:center">'+d.daily_stop_limit+'</td>'
+        +'<td style="text-align:center">'+((d.sqft_capacity||50000)/1000)+'k sq ft</td>'
+        +'<td><div style="display:flex;gap:4px">'
+        +'<button class="btn2 bsm" data-a="editDrv" data-id="'+d.id+'">✏️ Edit</button>'
+        +'<button class="btnd" data-a="delDrv" data-id="'+d.id+'">Remove</button>'
+        +'</div></td>'
+        +'</tr>';
     });
-    html+='<div class="card" style="margin-bottom:12px"><div class="card-hdr"><strong>'+dept.name+'</strong>';
-    html+='<div style="display:flex;gap:5px"><button class="btn2 bsm" data-a="addDrv" data-id="'+dept.id+'">+ Driver</button>';
-    html+='<button class="btn2 bsm" data-a="editDept" data-id="'+dept.id+'">Edit</button>';
-    html+='<button class="btnd" data-a="delDept" data-id="'+dept.id+'">Remove</button></div></div>';
-    html+='<div style="padding:10px 14px;font-size:11px;color:#6b7280">'+(dept.depot_address||'No depot set')+'</div>';
-    if(rows){html+='<div style="padding:0 14px 10px"><table class="dt"><thead><tr><th>Name</th><th>Zone</th><th>Services</th><th>Limit</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';}
-    html+='</div>';
+    html+='<div class="card" style="margin-bottom:14px">'
+      +'<div class="card-hdr" style="background:'+( dept.color||'#2D6A4F')+'18;border-bottom:2px solid '+(dept.color||'#2D6A4F')+'33">'
+      +'<div style="display:flex;align-items:center;gap:8px"><div style="width:12px;height:12px;border-radius:50%;background:'+(dept.color||'#2D6A4F')+'"></div><strong style="font-size:14px">'+dept.name+'</strong></div>'
+      +'<div style="display:flex;gap:5px">'
+      +'<button class="btn2 bsm" data-a="addDrv" data-id="'+dept.id+'">+ Add Driver</button>'
+      +'<button class="btn2 bsm" data-a="editDept" data-id="'+dept.id+'">Edit Dept</button>'
+      +'<button class="btnd" data-a="delDept" data-id="'+dept.id+'">Remove</button>'
+      +'</div></div>'
+      +'<div style="padding:10px 14px;font-size:11px;color:#6b7280;display:flex;align-items:center;gap:6px">'
+      +'<span>📍</span><span>'+(dept.depot_address||'<span style="color:#DC2626">No depot set — click Edit Dept to add</span>')+'</span>'
+      +'</div>'
+      +(drvs.length
+        ?'<div style="padding:0 14px 14px"><table class="dt" style="margin:0">'
+          +'<thead><tr><th>Driver</th><th>Zone</th><th>Services</th><th style="text-align:center">Stops/Day</th><th style="text-align:center">Sq Ft/Day</th><th>Actions</th></tr></thead>'
+          +'<tbody>'+rows+'</tbody></table></div>'
+        :'<div style="padding:10px 14px 14px;font-size:12px;color:#9CA3AF">No drivers yet — click + Add Driver</div>'
+      )
+      +'</div>';
   });
   el.innerHTML=html;
   el.onclick=function(e){
     var b=e.target.closest('[data-a]');if(!b)return;
     var a=b.dataset.a,id=b.dataset.id;
-    if(a==='editDrv')editDrv(id);else if(a==='delDrv')delDrv(id);
-    else if(a==='editDept')editDept(id);else if(a==='delDept')delDept(id);
+    if(a==='editDrv')editDrv(id);
+    else if(a==='delDrv')delDrv(id);
+    else if(a==='editDept')editDept(id);
+    else if(a==='delDept')delDept(id);
     else if(a==='addDrv')addDrvToDept(id);
   };
 }
