@@ -155,6 +155,8 @@ textarea{resize:vertical;min-height:60px}
 .login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1A2B1A 0%,#2D4A2D 100%);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:0}
 .login-card{background:#fff;border-radius:16px;padding:36px 40px;width:360px;max-width:94vw;box-shadow:0 24px 80px rgba(0,0,0,.35);text-align:center}
 .login-logo{font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1A2B1A;margin-bottom:4px}
+.logo-plus{font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:#2D6A4F;vertical-align:middle;position:relative;top:-4px;margin:0 1px}
+.brand-plus{font-family:Arial,sans-serif;font-size:9px;font-weight:700;color:#5DBE6E;vertical-align:middle;position:relative;top:-3px;margin:0 1px}
 .login-logo span{color:#5DBE6E}
 .login-tag{font-size:11px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:28px}
 .login-users{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
@@ -182,7 +184,7 @@ textarea{resize:vertical;min-height:60px}
 <!-- LOGIN SCREEN -->
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
-    <div class="login-logo">A+<span>Route</span></div>
+    <div class="login-logo">A<span class="logo-plus">+</span><span>Route</span></div>
     <div class="login-tag">Dispatch Management</div>
     <div id="loginStep1">
       <div class="pin-label">Who are you?</div>
@@ -307,7 +309,7 @@ textarea{resize:vertical;min-height:60px}
 
 <div class="app" id="mainApp" style="display:none">
 <nav class="nav">
-  <div class="logo"><div class="brand">A+<span>Route</span></div><div class="tag">Dispatch</div></div>
+  <div class="logo"><div class="brand">A<span class="brand-plus">+</span><span>Route</span></div><div class="tag">Dispatch</div></div>
   <div class="depts"><div class="dl">Department</div><div id="deptPills"></div></div>
   <div class="nsec">Operations</div>
   <div class="ni on" onclick="showPage('cal',this)">📅 Monthly Schedule</div>
