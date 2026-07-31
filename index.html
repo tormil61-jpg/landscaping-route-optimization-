@@ -2084,6 +2084,7 @@ function clearQuickRoute(){
   document.getElementById('qrDirPanel').style.display='none';
   document.getElementById('qrMapWrap').innerHTML='Enter addresses and click Get Route';
   document.getElementById('qrMapWrap').style.cssText='background:#F9FAFB;border:1px solid #E2E5EA;border-radius:8px;height:480px;display:flex;align-items:center;justify-content:center;color:#9CA3AF;font-size:13px';
+  window._qrOrdered=null;window._qrOriginal=null;window._qrStart=null;
 }
 
 async function runQuickRoute(){
@@ -2145,13 +2146,22 @@ async function runQuickRoute(){
   // Show ordered list
   var listEl=document.getElementById('qrList');
   listEl.style.display='block';
-  listEl.innerHTML='<div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Optimised Order</div>'
+  listEl.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+    +'<div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px">Optimised Order</div>'
+    +'<div style="display:flex;gap:5px">'
+    +'<button class="btn2 bsm" onclick="reOptimiseQuickRoute()">🗺 Re-Optimise</button>'
+    +'<button class="btn2 bsm" onclick="resetQuickRouteOrder()">🔄 Reset</button>'
+    +'</div></div>'
     +(startAddr?'<div style="display:flex;gap:8px;align-items:center;padding:7px 9px;background:#1A2B1A;color:#fff;border-radius:5px;margin-bottom:4px;font-size:11px"><span style="background:#5DBE6E;color:#1A2B1A;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0">S</span>'+startAddr+'</div>':'')
+    +'<div id="qrStopList">'
     +ordered.map(function(s,i){
-      return'<div style="display:flex;gap:8px;align-items:center;padding:7px 9px;background:#fff;border:1px solid #E2E5EA;border-radius:5px;margin-bottom:3px;font-size:11px">'
+      return'<div style="display:flex;gap:8px;align-items:center;padding:7px 9px;background:#fff;border:1px solid #E2E5EA;border-radius:5px;margin-bottom:3px;font-size:11px" data-idx="'+i+'">'
         +'<span style="background:#2D6A4F;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0">'+(i+1)+'</span>'
-        +s.address+'</div>';
+        +'<span style="flex:1">'+s.address+'</span>'
+        +'<button class="btnd" style="padding:2px 6px;font-size:10px" onclick="removeQRStop('+i+')">✕</button>'
+        +'</div>';
     }).join('')
+    +'</div>'
     +'<div style="display:flex;gap:6px;margin-top:10px">'
     +'<button class="btn" onclick="copyQuickRoute()" style="flex:1">📋 Copy Route</button>'
     +'<button class="btn2" onclick="printQuickRoute()">🖨 Print</button>'
@@ -2230,6 +2240,7 @@ async function runQuickRoute(){
 
   // Store for copy/print
   window._qrOrdered=ordered;
+  window._qrOriginal=ordered.slice(); // Save original for reset
   window._qrStart=startAddr;
   toast('Route ready','ok');
 }
@@ -2237,6 +2248,70 @@ async function runQuickRoute(){
 function toggleQRDir(){
   var el=document.getElementById('qrDirPanel');
   el.style.display=el.style.display==='none'||!el.style.display?'block':'none';
+}
+
+function removeQRStop(idx){
+  if(!window._qrOrdered)return;
+  window._qrOrdered.splice(idx,1);
+  renderQRStopList();
+  toast('Stop removed. Click Re-Optimise to update the route.','ok');
+}
+
+function renderQRStopList(){
+  var el=document.getElementById('qrStopList');
+  if(!el||!window._qrOrdered)return;
+  el.innerHTML=window._qrOrdered.map(function(s,i){
+    return'<div style="display:flex;gap:8px;align-items:center;padding:7px 9px;background:#fff;border:1px solid #E2E5EA;border-radius:5px;margin-bottom:3px;font-size:11px">'
+      +'<span style="background:#2D6A4F;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0">'+(i+1)+'</span>'
+      +'<span style="flex:1">'+s.address+'</span>'
+      +'<button class="btnd" style="padding:2px 6px;font-size:10px" onclick="removeQRStop('+i+')">✕</button>'
+      +'</div>';
+  }).join('');
+}
+
+async function reOptimiseQuickRoute(){
+  if(!window._qrOrdered||!window._qrOrdered.length){toast('No stops to optimise','err');return;}
+  toast('Re-optimising '+window._qrOrdered.length+' stops...');
+  var startAddr=document.getElementById('qrStart').value.trim();
+  var startGeo=null;
+  if(startAddr)startGeo=await geocodeAddr(startAddr,null);
+  var ordered=await optimiseRoute(window._qrOrdered,startAddr&&startGeo?startAddr:null);
+  window._qrOrdered=ordered;
+  renderQRStopList();
+  // Redraw map
+  var wrap=document.getElementById('qrMapWrap');
+  wrap.innerHTML='<div id="qrMap" style="width:100%;height:100%;border-radius:8px"></div>';
+  if(S.gmReady){
+    var map=new google.maps.Map(document.getElementById('qrMap'),{zoom:12,center:{lat:ordered[0].lat,lng:ordered[0].lng},mapTypeId:'roadmap',styles:mapStyle()});
+    var bounds=new google.maps.LatLngBounds();
+    if(startGeo){
+      bounds.extend({lat:startGeo.lat,lng:startGeo.lng});
+      new google.maps.Marker({position:{lat:startGeo.lat,lng:startGeo.lng},map:map,label:{text:'S',color:'#fff',fontWeight:'bold',fontSize:'11px'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:16,fillColor:'#1A2B1A',fillOpacity:1,strokeColor:'#5DBE6E',strokeWeight:2.5},zIndex:500});
+    }
+    ordered.forEach(function(s,i){
+      bounds.extend({lat:s.lat,lng:s.lng});
+      var iw=new google.maps.InfoWindow({content:'<div style="font-size:12px;padding:6px"><strong>Stop '+(i+1)+'</strong><br>'+s.address+'</div>'});
+      var m=new google.maps.Marker({position:{lat:s.lat,lng:s.lng},map:map,label:{text:String(i+1),color:'#fff',fontWeight:'bold',fontSize:'11px'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:16,fillColor:'#2D6A4F',fillOpacity:1,strokeColor:'#fff',strokeWeight:2.5},zIndex:100+i});
+      m.addListener('click',function(){iw.open(map,m);});
+    });
+    map.fitBounds(bounds,{padding:50});
+    var svc=new google.maps.DirectionsService();
+    var ren=new google.maps.DirectionsRenderer({map:map,suppressMarkers:true,polylineOptions:{strokeColor:'#2D6A4F',strokeOpacity:.9,strokeWeight:5}});
+    var origin=startGeo?new google.maps.LatLng(startGeo.lat,startGeo.lng):new google.maps.LatLng(ordered[0].lat,ordered[0].lng);
+    var dest=new google.maps.LatLng(ordered[ordered.length-1].lat,ordered[ordered.length-1].lng);
+    var waypoints=ordered.slice(startGeo?0:1,startGeo?ordered.length:ordered.length-1).map(function(s){return{location:new google.maps.LatLng(s.lat,s.lng),stopover:true};});
+    svc.route({origin:origin,destination:dest,waypoints:waypoints,travelMode:google.maps.TravelMode.DRIVING,optimizeWaypoints:false},function(result,status){
+      if(status==='OK')ren.setDirections(result);
+    });
+  }
+  toast('Route re-optimised for '+ordered.length+' stops','ok');
+}
+
+function resetQuickRouteOrder(){
+  if(!window._qrOriginal||!window._qrOriginal.length){toast('No original order to reset to','err');return;}
+  window._qrOrdered=window._qrOriginal.slice();
+  renderQRStopList();
+  toast('Reset to original order. Click Re-Optimise to re-calculate.','ok');
 }
 
 function copyQuickRoute(){
