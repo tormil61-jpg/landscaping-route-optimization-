@@ -1,0 +1,1968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RouteLoop — Dispatch Management</title>
+<meta name="description" content="RouteLoop — Landscaping Dispatch Management">
+<meta name="theme-color" content="#1A2B1A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RouteLoop">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%231A2B1A'/%3E%3Ctext y='.9em' font-size='80' x='10'%3E%F0%9F%8C%BF%3C/text%3E%3C/svg%3E">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;font-family:Roboto,sans-serif;font-size:13px;background:#F0F2F5;color:#1A1F2E}
+.app{display:flex;height:100vh;overflow:hidden}
+.nav{width:220px;background:#1A2B1A;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.logo{padding:14px 18px 12px;border-bottom:1px solid #2a3d2a}
+.brand{font-family:Georgia,serif;font-size:15px;font-weight:700;color:#fff}
+.brand span{color:#5DBE6E}
+.tag{font-size:10px;color:#7aaa7a;text-transform:uppercase;letter-spacing:.5px}
+.depts{padding:10px 14px 6px}
+.dl{font-size:9px;font-weight:700;color:#5a7a5a;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.dp{display:flex;align-items:center;gap:7px;padding:6px 10px;border-radius:6px;cursor:pointer;margin-bottom:3px;font-size:12px;font-weight:500;color:#b8d4b8;border:1px solid transparent}
+.dp:hover,.dp.on{background:#2a4a2a;color:#fff;border-color:#5DBE6E}
+.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.nsec{padding:10px 14px 3px;font-size:9px;font-weight:700;color:#5a7a5a;text-transform:uppercase;letter-spacing:1px}
+.ni{display:flex;align-items:center;gap:9px;padding:8px 18px;font-size:12px;font-weight:500;color:#b8d4b8;cursor:pointer;border-left:3px solid transparent}
+.ni:hover,.ni.on{background:#2a4a2a;color:#fff;border-left-color:#5DBE6E}
+.nb{margin-top:auto;border-top:1px solid #2a3d2a;padding:10px 12px}
+.depot-box{padding:7px 9px;background:#243824;border-radius:5px;font-size:10px;color:#7aaa7a;line-height:1.5;margin-bottom:4px}
+.depot-box strong{color:#fff;display:block;font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:1px}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{background:#fff;border-bottom:1px solid #E2E5EA;padding:0 18px;height:50px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.tt{font-size:14px;font-weight:700;flex:1}
+.tdept{font-size:11px;font-weight:600;padding:3px 10px;border-radius:12px;color:#fff;flex-shrink:0}
+.tdate{font-size:11px;color:#6b7280;white-space:nowrap}
+.sb{background:#fff;border-bottom:1px solid #E2E5EA;padding:0 18px;height:44px;display:flex;align-items:center;gap:6px;flex-shrink:0;overflow-x:auto}
+.body{flex:1;overflow-y:auto;padding:16px 18px}
+.page{display:none}.page.on{display:block}
+.phdr{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:14px;gap:10px;flex-wrap:wrap}
+.phdr h1{font-size:17px;font-weight:700}
+/* CALENDAR */
+.cal-nav{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+.cal-month{font-size:16px;font-weight:700}
+.cal-dsels{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px}
+.cdb{padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;border:1.5px solid #D1D5DB;background:#fff;color:#6b7280;cursor:pointer}
+.cdb.on{color:#fff}
+.cdb:hover:not(.on){border-color:#2D6A4F;color:#2D6A4F}
+.cgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:12px}
+.chdr{text-align:center;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;padding:6px 0;letter-spacing:.5px}
+.chdr.fri{color:#D97706}
+.cc{min-height:80px;background:#fff;border:1px solid #E2E5EA;border-radius:6px;padding:5px;cursor:pointer;transition:border-color .12s;position:relative;overflow:hidden}
+.cc:hover:not(.nc){border-color:#2D6A4F;background:#f8fff8}
+.cc.today{border-color:#2D6A4F;border-width:2px}
+.cc.sel{border-color:#2D6A4F;background:#f0fdf4;border-width:2px}
+.cc.empty,.cc.nc{background:#F9FAFB;border-color:#F3F4F6;cursor:default}
+.cc.fri{background:#FFFBEB;border-color:#FDE68A;cursor:default}
+.cc.past{opacity:.5}
+.cdn{font-size:12px;font-weight:700}
+.tbub{background:#2D6A4F;color:#fff;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700}
+.csc{font-size:10px;font-weight:600;color:#2D6A4F;margin-top:2px}
+.cdl{font-size:9px;padding:1px 3px;border-radius:2px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* DAY PANEL */
+.dpanel{background:#fff;border:1px solid #E2E5EA;border-radius:8px;padding:14px;margin-bottom:12px}
+.dphdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #F0F2F5}
+.sr{display:flex;align-items:center;gap:7px;padding:7px 9px;border-radius:5px;border:1px solid #E2E5EA;background:#fff;margin-bottom:3px;cursor:grab}
+.sr:hover{border-color:#2D6A4F;background:#f8fff8}
+.sr.done{border-color:#BBF7D0;background:#f0fdf4}
+.sr.miss{border-color:#fca5a5;background:#fff5f5;opacity:.75}
+.sn{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0}
+.sa{flex:1;font-size:11px;font-weight:500;line-height:1.4}
+.ss{font-size:9px;color:#6b7280}
+.sacts{display:flex;gap:3px;flex-shrink:0}
+/* MAPS */
+.mwrap{border-radius:8px;overflow:hidden;border:1px solid #E2E5EA}
+.mtabs{display:flex;gap:5px;margin-bottom:8px;overflow-x:auto;padding-bottom:2px}
+.mtab{padding:5px 13px;border-radius:16px;font-size:11px;font-weight:600;border:1.5px solid #D1D5DB;background:#fff;color:#6b7280;cursor:pointer;white-space:nowrap;flex-shrink:0}
+.mtab.on{background:#2D6A4F;color:#fff;border-color:#2D6A4F}
+.rstats{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:10px}
+.rsc{background:#fff;border:1px solid #E2E5EA;border-radius:7px;padding:10px 12px}
+.rsn{font-size:18px;font-weight:700}
+.rsl{font-size:10px;color:#6b7280;margin-top:1px}
+/* BADGES */
+.b{display:inline-block;padding:2px 5px;border-radius:3px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.3px}
+.bc{background:#EFF6FF;color:#2563EB}
+.br{background:#F0FDF4;color:#16A34A}
+.bw{background:#FFFBEB;color:#D97706}
+.bd{background:#DCFCE7;color:#15803D}
+.bm{background:#FEF2F2;color:#DC2626}
+.bg{background:#F3F4F6;color:#6b7280}
+.bb{background:#EFF6FF;color:#2563EB}
+/* TABLES */
+.dt{width:100%;border-collapse:collapse}
+.dt th{background:#F9FAFB;padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:#6b7280;text-transform:uppercase;border-bottom:1px solid #E5E7EB}
+.dt td{padding:8px 10px;border-bottom:1px solid #F3F4F6;font-size:12px;vertical-align:middle}
+.dt tr:hover td{background:#F9FAFB}
+/* CARDS */
+.card{background:#fff;border:1px solid #E2E5EA;border-radius:8px;margin-bottom:12px;overflow:hidden}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;background:#F9FAFB;border-bottom:1px solid #E2E5EA}
+/* BUTTONS */
+button{cursor:pointer;border:none;border-radius:5px;font-family:Roboto,sans-serif;font-size:12px;font-weight:500;padding:6px 11px;transition:all .12s}
+.btn{background:#2D6A4F;color:#fff}
+.btn:hover{background:#245840}
+.btn2{background:#fff;color:#374151;border:1px solid #D1D5DB}
+.btn2:hover{background:#F9FAFB}
+.btnd{background:#fff;color:#DC2626;border:1px solid #FECACA;font-size:10px;padding:3px 7px}
+.btnw{background:#fff;color:#D97706;border:1px solid #FDE68A;font-size:10px;padding:3px 7px}
+.btns{background:#16A34A;color:#fff;font-size:10px;padding:3px 7px}
+.bsm{font-size:11px;padding:4px 8px}
+/* FORMS */
+input,textarea,select{width:100%;background:#fff;border:1px solid #D1D5DB;border-radius:5px;color:#1A1F2E;font-family:Roboto,sans-serif;font-size:12px;padding:7px 9px;outline:none}
+input:focus,textarea:focus,select:focus{border-color:#2D6A4F}
+textarea{resize:vertical;min-height:60px}
+.fg{margin-bottom:10px}
+.fl{display:block;font-size:10px;font-weight:700;color:#374151;margin-bottom:3px;text-transform:uppercase;letter-spacing:.4px}
+.fr2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.chk{display:flex;align-items:center;gap:5px;font-size:12px;color:#374151}
+.chk input{width:auto;accent-color:#2D6A4F}
+/* MODAL */
+.mo{display:none;position:fixed;inset:0;background:rgba(15,23,15,.55);z-index:500;align-items:center;justify-content:center}
+.mo.on{display:flex}
+.modal{background:#fff;border-radius:10px;padding:22px;width:500px;max-width:95vw;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal h2{font-size:15px;font-weight:700;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid #E5E7EB}
+.mfoot{display:flex;justify-content:flex-end;gap:7px;margin-top:14px;padding-top:12px;border-top:1px solid #E5E7EB}
+/* UPLOAD */
+.uzone{border:2px dashed #D1D5DB;border-radius:8px;padding:22px;text-align:center;cursor:pointer;transition:all .15s}
+.uzone:hover,.uzone.over{border-color:#2D6A4F;background:#f0fdf4}
+.uzone input{display:none}
+.dchk{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid #E2E5EA;border-radius:5px;margin-bottom:5px;background:#F9FAFB;cursor:pointer}
+.dchk:hover{background:#f0fdf4}
+.slrow{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;border:1px solid #E2E5EA;border-radius:5px;margin-bottom:5px;background:#F9FAFB}
+/* MISC */
+.empty{text-align:center;padding:32px 16px;color:#9CA3AF}
+.empty .icon{font-size:28px;margin-bottom:8px}
+.toast{position:fixed;bottom:18px;right:18px;background:#1A2B1A;color:#fff;padding:9px 14px;border-radius:6px;font-size:12px;font-weight:500;z-index:999;opacity:0;transform:translateY(6px);transition:all .2s;pointer-events:none;max-width:320px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.toast.on{opacity:1;transform:translateY(0)}
+.toast.err{background:#DC2626}
+.toast.ok{background:#16A34A}
+.inner-tabs{display:flex;gap:3px;margin-bottom:12px;border-bottom:1px solid #E2E5EA}
+.itab{padding:6px 14px;font-size:12px;font-weight:600;color:#6b7280;cursor:pointer;border-bottom:2px solid transparent}
+.itab.on{color:#2D6A4F;border-bottom-color:#2D6A4F}
+.litem{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #F3F4F6;font-size:12px}
+.litem:last-child{border-bottom:none}
+.cpick{display:flex;gap:7px;flex-wrap:wrap}
+.csw{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent}
+.csw.on{border-color:#1A1F2E;transform:scale(1.15)}
+.banner{display:flex;align-items:center;gap:10px;padding:9px 13px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:7px;margin-bottom:12px;font-size:12px;color:#92400E}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-thumb{background:#D1D5DB;border-radius:4px}
+
+/* LOGIN */
+.login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1A2B1A 0%,#2D4A2D 100%);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:0}
+.login-card{background:#fff;border-radius:16px;padding:36px 40px;width:360px;max-width:94vw;box-shadow:0 24px 80px rgba(0,0,0,.35);text-align:center}
+.login-logo{font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1A2B1A;margin-bottom:4px}
+.login-logo span{color:#5DBE6E}
+.login-tag{font-size:11px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:28px}
+.login-users{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
+.login-user{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #E2E5EA;border-radius:8px;cursor:pointer;text-align:left;background:#fff;transition:all .12s}
+.login-user:hover{border-color:#2D6A4F;background:#f0fdf4}
+.login-user.sel{border-color:#2D6A4F;background:#f0fdf4}
+.login-avatar{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0}
+.login-uname{font-size:13px;font-weight:600;color:#1A1F2E}
+.login-urole{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.4px}
+.pin-label{font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.pin-dots{display:flex;gap:10px;justify-content:center;margin-bottom:20px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid #D1D5DB;background:#fff;transition:all .15s}
+.pin-dot.filled{background:#2D6A4F;border-color:#2D6A4F}
+.pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.pin-btn{padding:14px;border-radius:8px;border:1.5px solid #E2E5EA;background:#fff;font-size:18px;font-weight:600;color:#1A1F2E;cursor:pointer;transition:all .12s}
+.pin-btn:hover{background:#f0fdf4;border-color:#2D6A4F}
+.pin-btn:active{background:#dcfce7;transform:scale(.96)}
+.pin-clear{font-size:12px;color:#6b7280}
+.login-err{color:#DC2626;font-size:12px;margin-top:8px;min-height:18px}
+.setup-hint{font-size:11px;color:#6b7280;margin-top:8px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">Route<span>Loop</span></div>
+    <div class="login-tag">Dispatch Management</div>
+    <div id="loginStep1">
+      <div class="pin-label">Who are you?</div>
+      <div class="login-users" id="loginUserList"></div>
+    </div>
+    <div id="loginStep2" style="display:none">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:18px;justify-content:center">
+        <div class="login-avatar" id="selAvatar" style="background:#2D6A4F"></div>
+        <div style="text-align:left"><div class="login-uname" id="selName"></div><div class="login-urole" id="selRole"></div></div>
+      </div>
+      <div class="pin-label" id="pinLabel">Enter your PIN</div>
+      <div class="pin-dots" id="pinDots">
+        <div class="pin-dot" id="pd0"></div>
+        <div class="pin-dot" id="pd1"></div>
+        <div class="pin-dot" id="pd2"></div>
+        <div class="pin-dot" id="pd3"></div>
+      </div>
+      <div class="pin-pad">
+        <button class="pin-btn" onclick="pinPress('1')">1</button>
+        <button class="pin-btn" onclick="pinPress('2')">2</button>
+        <button class="pin-btn" onclick="pinPress('3')">3</button>
+        <button class="pin-btn" onclick="pinPress('4')">4</button>
+        <button class="pin-btn" onclick="pinPress('5')">5</button>
+        <button class="pin-btn" onclick="pinPress('6')">6</button>
+        <button class="pin-btn" onclick="pinPress('7')">7</button>
+        <button class="pin-btn" onclick="pinPress('8')">8</button>
+        <button class="pin-btn" onclick="pinPress('9')">9</button>
+        <button class="pin-btn pin-clear" onclick="pinBack()">⌫</button>
+        <button class="pin-btn" onclick="pinPress('0')">0</button>
+        <button class="pin-btn pin-clear" onclick="loginBack()">↩</button>
+      </div>
+      <div class="login-err" id="loginErr"></div>
+      <div class="setup-hint" id="setupHint" style="display:none">This is your first login. Enter a 4-digit PIN to set up your account.</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- USER MANAGEMENT MODAL (admin only) -->
+<div class="mo" id="userMo">
+  <div class="modal" style="width:480px">
+    <h2>User Management</h2>
+    <div id="userList" style="margin-bottom:14px"></div>
+    <div style="border-top:1px solid #E5E7EB;padding-top:14px">
+      <div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Add New User</div>
+      <div class="fr2">
+        <div class="fg"><label class="fl">Name</label><input type="text" id="newUserName" placeholder="e.g. Maria"></div>
+        <div class="fg"><label class="fl">Role</label>
+          <select id="newUserRole">
+            <option value="dispatcher">Dispatcher</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn" onclick="addUser()" style="width:100%">Add User</button>
+    </div>
+    <div class="mfoot"><button class="btn2" onclick="closeModal('userMo')">Close</button></div>
+  </div>
+</div>
+
+<div class="app" id="mainApp" style="display:none">
+<nav class="nav">
+  <div class="logo"><div class="brand">Route<span>Loop</span></div><div class="tag">Dispatch</div></div>
+  <div class="depts"><div class="dl">Department</div><div id="deptPills"></div></div>
+  <div class="nsec">Operations</div>
+  <div class="ni on" onclick="showPage('cal',this)">📅 Monthly Schedule</div>
+  <div class="ni" onclick="showPage('maps',this)">🗺 Route Maps</div>
+  <div class="ni" onclick="showPage('duesoon',this)">⏰ Due Soon</div>
+  <div class="nsec">Management</div>
+  <div class="ni" onclick="showPage('depts',this)">🏢 Departments</div>
+  <div class="ni" onclick="showPage('drvs',this)">👷 Drivers</div>
+  <div class="ni" onclick="showPage('clients',this)">🏠 Clients</div>
+  <div class="ni admin-only" onclick="openModal('userMo');renderUserList()" style="display:none">👥 Users</div>
+  <div class="ni" onclick="doLogout()" style="margin-top:auto;color:#fca5a5">🔒 Sign Out</div>
+  <div class="nb">
+    <div class="depot-box"><strong>Active Depot</strong><span id="depotTxt">Not set</span></div>
+    <button class="btn2 bsm" style="width:100%;margin-top:5px" onclick="openModal('depotMo')">Edit Depot</button>
+  </div>
+</nav>
+<div class="main">
+  <div class="topbar">
+    <div class="tt" id="pageTitle">Monthly Schedule</div>
+    <div class="tdept" id="tdept" style="background:#6b7280">All</div>
+    <div class="tdate" id="tdate"></div>
+    <div style="font-size:11px;font-weight:600;color:#2D6A4F;padding:4px 10px;border:1.5px solid #2D6A4F;border-radius:12px" id="topbarUser"></div>
+    <div style="display:flex;gap:5px">
+      <button class="btn2 bsm" onclick="openImport()">📥 Import</button>
+      <button class="btn2 bsm" onclick="runOptimise()">🗺 Optimise</button>
+      <button class="btn2 bsm" onclick="exportExcel()">📊 Export</button>
+    </div>
+  </div>
+  <div class="sb" id="statBar"></div>
+  <div class="body">
+
+    <!-- CALENDAR -->
+    <div class="page on" id="page-cal">
+      <div class="cal-dsels" id="calDrvSel"></div>
+      <div class="cal-nav">
+        <button class="btn2 bsm" onclick="prevMonth()">← Prev</button>
+        <div class="cal-month" id="calLabel"></div>
+        <button class="btn2 bsm" onclick="nextMonth()">Next →</button>
+        <div style="margin-left:auto;display:flex;gap:5px">
+          <button class="btn2 bsm" onclick="runOptimise()">🗺 Geocode & Optimise</button>
+        </div>
+      </div>
+      <div class="cgrid" id="calGrid"></div>
+      <div id="dayPanel" style="display:none"></div>
+    </div>
+
+    <!-- MAPS -->
+    <div class="page" id="page-maps">
+      <div class="phdr"><div><h1>Route Maps</h1></div></div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:flex-end">
+        <div class="fg" style="margin:0;min-width:150px"><label class="fl">Date</label><input type="date" id="mapDate" onchange="renderMaps()"></div>
+        <button class="btn2 bsm" onclick="toggleTraffic()" id="trafficBtn">🚦 Traffic</button>
+        <button class="btn2 bsm" onclick="toggleSat()" id="satBtn">🛰 Satellite</button>
+      </div>
+      <div class="rstats" id="rStats"></div>
+      <div class="mtabs" id="mapTabs"></div>
+      <div id="mapContent"><div class="empty"><div class="icon">🗺</div><p>Select a date to view routes</p></div></div>
+      <div id="mapLegend" style="display:none;display:flex;gap:10px;flex-wrap:wrap;padding:8px 12px;background:#fff;border:1px solid #E2E5EA;border-radius:6px;margin-top:8px"></div>
+      <div id="dirPanel" style="display:none;margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Turn by Turn</div>
+        <div id="dirContent" style="background:#fff;border:1px solid #E2E5EA;border-radius:8px;padding:10px;max-height:300px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- DUE SOON -->
+    <div class="page" id="page-duesoon">
+      <div class="phdr"><div><h1>Due Soon</h1><p>Clients due in next 14 days</p></div>
+        <button class="btn" onclick="scheduleAllDue()">Schedule All Due</button>
+      </div>
+      <div id="dueSoonContent"><div class="empty"><div class="icon">⏰</div><p>No clients due soon</p></div></div>
+    </div>
+
+    <!-- DEPARTMENTS -->
+    <div class="page" id="page-depts">
+      <div class="phdr"><div><h1>Departments</h1></div><button class="btn" onclick="openModal('deptMo');clearDeptForm()">+ Add</button></div>
+      <div id="deptCards"></div>
+    </div>
+
+    <!-- DRIVERS -->
+    <div class="page" id="page-drvs">
+      <div class="phdr"><div><h1>Drivers</h1></div><button class="btn" onclick="openDrvModal()">+ Add Driver</button></div>
+      <div style="background:#fff;border:1px solid #E2E5EA;border-radius:8px;overflow:hidden">
+        <table class="dt"><thead><tr><th>Name</th><th>Dept</th><th>Zone</th><th>Services</th><th>Property</th><th>Limit</th><th>Actions</th></tr></thead>
+        <tbody id="drvTbl"></tbody></table>
+      </div>
+    </div>
+
+    <!-- CLIENTS -->
+    <div class="page" id="page-clients">
+      <div class="phdr"><div><h1>Clients & History</h1></div></div>
+      <div class="inner-tabs">
+        <div class="itab on" onclick="showInner('clientTab',this)">Clients</div>
+        <div class="itab" onclick="showInner('histTab',this)">History</div>
+      </div>
+      <div id="clientTab">
+        <div style="background:#fff;border:1px solid #E2E5EA;border-radius:8px;overflow:hidden">
+          <table class="dt"><thead><tr><th>Address</th><th>Type</th><th>Last Service</th><th>Next Due</th><th>Status</th></tr></thead>
+          <tbody id="clientTbl"></tbody></table>
+        </div>
+      </div>
+      <div id="histTab" style="display:none">
+        <div style="display:flex;gap:6px;margin-bottom:10px">
+          <select id="histDrv" onchange="loadHist()" style="width:140px"><option value="">All Drivers</option></select>
+          <input type="date" id="histDate" onchange="loadHist()">
+        </div>
+        <div style="background:#fff;border:1px solid #E2E5EA;border-radius:8px;overflow:hidden">
+          <table class="dt"><thead><tr><th>Date</th><th>Driver</th><th>Address</th><th>Service</th><th>Status</th></tr></thead>
+          <tbody id="histTbl"></tbody></table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- MODALS -->
+<div class="mo" id="depotMo">
+  <div class="modal"><h2>Set Depot Address</h2>
+    <div class="fg"><label class="fl">Department</label><select id="depotDeptSel" onchange="loadDepotVal()"></select></div>
+    <div class="fg"><label class="fl">Depot Address</label><input type="text" id="depotVal" placeholder="123 Main St, Gainesville, FL 32601"></div>
+    <div class="mfoot"><button class="btn2" onclick="closeModal('depotMo')">Cancel</button><button class="btn" onclick="saveDepot()">Save</button></div>
+  </div>
+</div>
+
+<div class="mo" id="deptMo">
+  <div class="modal"><h2 id="deptMoTitle">Add Department</h2>
+    <div class="fr2">
+      <div class="fg"><label class="fl">Name</label><input type="text" id="deptName"></div>
+      <div class="fg"><label class="fl">City</label><input type="text" id="deptCity"></div>
+    </div>
+    <div class="fg"><label class="fl">Depot Address</label><input type="text" id="deptDepot"></div>
+    <div class="fg"><label class="fl">Colour</label><div class="cpick" id="deptCpick"></div></div>
+    <input type="hidden" id="deptEditId">
+    <div class="mfoot"><button class="btn2" onclick="closeModal('deptMo')">Cancel</button><button class="btn" onclick="saveDept()">Save</button></div>
+  </div>
+</div>
+
+<div class="mo" id="drvMo">
+  <div class="modal"><h2 id="drvMoTitle">Add Driver</h2>
+    <div class="fr2">
+      <div class="fg"><label class="fl">Name</label><input type="text" id="drvName"></div>
+      <div class="fg"><label class="fl">Zone</label><input type="text" id="drvZone" placeholder="e.g. North Gainesville FL"></div>
+    </div>
+    <div class="fg"><label class="fl">Department</label><select id="drvDept"></select></div>
+    <div class="fg"><label class="fl">Service Codes (comma separated)</label><input type="text" id="drvSvc" placeholder="e.g. LHT, ORN, DPP"></div>
+    <div class="fg"><label class="fl">Property Types</label>
+      <div style="display:flex;gap:14px;margin-top:3px">
+        <label class="chk"><input type="checkbox" id="ptCom"> Commercial</label>
+        <label class="chk"><input type="checkbox" id="ptRes"> Residential</label>
+      </div>
+    </div>
+    <div class="fr2">
+      <div class="fg"><label class="fl">Min/Stop</label><input type="number" id="drvTime" value="60" min="5"></div>
+      <div class="fg"><label class="fl">Daily Limit</label><input type="number" id="drvLimit" value="15" min="1" max="50"></div>
+    </div>
+    <div class="fg"><label class="fl">Colour</label><div class="cpick" id="drvCpick"></div></div>
+    <input type="hidden" id="drvEditId">
+    <div class="mfoot"><button class="btn2" onclick="closeModal('drvMo')">Cancel</button><button class="btn" onclick="saveDrv()">Save</button></div>
+  </div>
+</div>
+
+<div class="mo" id="importMo">
+  <div class="modal" style="width:540px"><h2>Import Addresses</h2>
+    <div class="fg"><label class="fl">Department</label><select id="impDept" onchange="onImpDeptChange()"><option value="">Select...</option></select></div>
+    <div class="fg" id="impDepotRow" style="display:none">
+      <label class="fl">Depot</label>
+      <div id="impDepotTxt" style="padding:6px 9px;background:#F9FAFB;border:1px solid #E2E5EA;border-radius:5px;font-size:11px"></div>
+    </div>
+    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:5px;padding:7px 10px;margin-bottom:10px;font-size:11px;color:#1E40AF">
+      <strong>LHT sheet?</strong> Check Kyle and Sam only. <strong>ORN sheet?</strong> Check Frank and Israel only.
+    </div>
+    <div class="fg"><label class="fl">Which drivers handle this import?</label><div id="drvChecks" style="display:flex;flex-direction:column;gap:5px"></div></div>
+    <div class="fg"><label class="fl">Schedule Start Date</label>
+      <input type="date" id="impStartDate">
+      <div style="font-size:10px;color:#6b7280;margin-top:3px">Stops will be scheduled Mon-Thu starting from this date. Leave blank to start from next available Monday.</div>
+    </div>
+    <div class="uzone" id="uzone" onclick="document.getElementById('ufile').click()" ondrop="onDrop(event)" ondragover="onDragOver(event)" ondragleave="this.classList.remove('over')">
+      <input type="file" id="ufile" accept=".xlsx,.xls,.csv" onchange="onFile(event)">
+      <div style="font-size:24px;margin-bottom:6px">📊</div>
+      <div style="font-size:13px;font-weight:600;color:#374151">Click or drag to upload Excel / CSV</div>
+      <div style="font-size:10px;color:#9CA3AF;margin-top:3px">Columns: A=Nickname, B=Service Type, C=Address, D=City, E=Zip, F=State</div>
+    </div>
+    <div id="impPreview" style="display:none;margin-top:12px">
+      <div id="prevTbl" style="overflow-x:auto;margin-bottom:10px;border:1px solid #E5E7EB;border-radius:6px;overflow:hidden;max-height:100px;overflow-y:auto"></div>
+      <div class="fr2" style="margin-bottom:8px">
+        <div class="fg" style="margin:0"><label class="fl">Street (C)</label><select id="cAddr"></select></div>
+        <div class="fg" style="margin:0"><label class="fl">City (D)</label><select id="cCity"><option value="">None</option></select></div>
+      </div>
+      <div class="fr2" style="margin-bottom:8px">
+        <div class="fg" style="margin:0"><label class="fl">Zip (E)</label><select id="cZip"><option value="">None</option></select></div>
+        <div class="fg" style="margin:0"><label class="fl">State (F)</label><select id="cState"><option value="">None</option></select></div>
+      </div>
+      <div class="fg" style="margin-bottom:10px"><label class="fl">Service Type (B)</label><select id="cSvc"><option value="">None</option></select></div>
+      <div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Stop Limit Per Driver Per Day</div>
+      <div id="limEditor"></div>
+      <div class="mfoot"><button class="btn2" onclick="closeModal('importMo')">Cancel</button><button class="btn" onclick="doImport()">Assign to Drivers</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="mo" id="reassignMo">
+  <div class="modal"><h2>Reschedule Stop</h2>
+    <div id="reassignAddr" style="font-size:11px;padding:7px 9px;background:#F9FAFB;border-radius:5px;margin-bottom:12px"></div>
+    <div class="fr2">
+      <div class="fg"><label class="fl">Driver</label><select id="reDrv"></select></div>
+      <div class="fg"><label class="fl">Date</label><input type="date" id="reDate"></div>
+    </div>
+    <input type="hidden" id="reStopId">
+    <div class="mfoot"><button class="btn2" onclick="closeModal('reassignMo')">Cancel</button><button class="btn" onclick="doReassign()">Reschedule</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════
+var SUPA='https://pdswrcrhvkidgmctrbzq.supabase.co';
+var KEY='sb_publishable_xtKqlvE_U5GWo3rmKCGaGA_yYS6sRqd';
+var GKEY='AIzaSyA-DDE458SVjZTaMRMYUvVMqpf2OqHgUyk';
+var COLORS=['#2D6A4F','#E07B39','#2563EB','#DC2626','#7C3AED','#0891B2','#D97706','#059669','#BE185D','#0F766E'];
+var DCOLS=['#2D6A4F','#2563EB','#7C3AED','#D97706','#DC2626'];
+var H={'apikey':KEY,'Authorization':'Bearer '+KEY,'Content-Type':'application/json'};
+
+// ═══════════════════════════════════════
+// STATE - single global object
+// ═══════════════════════════════════════
+var S={
+  depts:[],drvs:[],svcs:[],clients:[],clientScheds:[],stops:[],
+  activeDept:null,calDrv:null,
+  calY:new Date().getFullYear(),calM:new Date().getMonth(),
+  selDate:null,selColor:COLORS[0],selDeptColor:DCOLS[0],
+  upData:null,upHeaders:[],gmReady:false,
+  trafficLayer:null,curMap:null,mapType:'roadmap',
+  limMap:{}
+};
+
+// ═══════════════════════════════════════
+// DB
+// ═══════════════════════════════════════
+async function dbGet(t,q){
+  q=q||'';
+  var headers=Object.assign({},H,{'Range':'0-1999','Prefer':'count=none'});
+  var r=await fetch(SUPA+'/rest/v1/'+t+'?select=*'+q,{headers:headers});
+  if(!r.ok){console.error('GET',t,await r.text());return[];}
+  var d=await r.json();
+  return Array.isArray(d)?d:[];
+}
+async function dbInsert(t,d){
+  var r=await fetch(SUPA+'/rest/v1/'+t,{method:'POST',headers:Object.assign({},H,{'Prefer':'return=representation'}),body:JSON.stringify(d)});
+  if(!r.ok){console.error('INSERT',t,await r.text());return null;}
+  return r.json();
+}
+async function dbPatch(t,filter,d){
+  var r=await fetch(SUPA+'/rest/v1/'+t+'?'+filter,{method:'PATCH',headers:Object.assign({},H,{'Prefer':'return=minimal'}),body:JSON.stringify(d)});
+  if(!r.ok)console.error('PATCH',t,filter,await r.text());
+  return r.ok;
+}
+async function dbDel(t,id){
+  var r=await fetch(SUPA+'/rest/v1/'+t+'?id=eq.'+id,{method:'DELETE',headers:H});
+  return r.ok;
+}
+
+// ═══════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════
+window.onload=async function(){
+  document.getElementById('tdate').textContent=new Date().toLocaleDateString('en-CA',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('mapDate').value=new Date().toISOString().split('T')[0];
+  // Load app data first so login is instant
+  await Promise.all([loadDepts(),loadDrvs(),loadSvcs(),loadClients(),loadClientScheds()]);
+  await loadMonthStops();
+  renderAll();
+  loadGMaps();
+  // Then show login screen
+  await initLogin();
+  setTimeout(autoCleanup,3000);
+};
+
+// ═══════════════════════════════════════
+// LOGIN & USER MANAGEMENT
+// ═══════════════════════════════════════
+var L={user:null,pin:'',setting:false};
+var USER_COLORS=['#2D6A4F','#2563EB','#7C3AED','#DC2626','#D97706','#0891B2'];
+
+async function initLogin(){
+  var users=await dbGet('app_users','&order=created_at.asc');
+  if(!users||!users.length){
+    await dbInsert('app_users',{name:'Milton',role:'admin',pin_hash:null,color:USER_COLORS[0]});
+    users=await dbGet('app_users','&order=created_at.asc');
+  }
+  S.appUsers=users;
+  var sid=sessionStorage.getItem('rl_user');
+  if(sid){var u=users.find(function(x){return x.id===sid;});if(u){loginSuccess(u);return;}}
+  renderLoginUsers();
+}
+
+function renderLoginUsers(){
+  var el=document.getElementById('loginUserList');
+  if(!el)return;
+  el.innerHTML=(S.appUsers||[]).map(function(u){
+    return'<button class="login-user" data-uid="'+u.id+'">'
+      +'<div class="login-avatar" style="background:'+(u.color||'#2D6A4F')+'">'+u.name.charAt(0).toUpperCase()+'</div>'
+      +'<div><div class="login-uname">'+u.name+'</div><div class="login-urole">'+u.role+'</div></div>'
+      +'</button>';
+  }).join('');
+  el.onclick=function(e){var b=e.target.closest('[data-uid]');if(b)selectLoginUser(b.dataset.uid);};
+}
+
+function selectLoginUser(uid){
+  var u=(S.appUsers||[]).find(function(x){return x.id===uid;});if(!u)return;
+  L.user=u;L.pin='';L.setting=!u.pin_hash;
+  document.getElementById('selAvatar').textContent=u.name.charAt(0).toUpperCase();
+  document.getElementById('selAvatar').style.background=u.color||'#2D6A4F';
+  document.getElementById('selName').textContent=u.name;
+  document.getElementById('selRole').textContent=u.role;
+  document.getElementById('pinLabel').textContent=L.setting?'Set your PIN':'Enter your PIN';
+  document.getElementById('setupHint').style.display=L.setting?'block':'none';
+  document.getElementById('loginErr').textContent='';
+  updatePinDots();
+  document.getElementById('loginStep1').style.display='none';
+  document.getElementById('loginStep2').style.display='block';
+}
+
+function loginBack(){
+  document.getElementById('loginStep1').style.display='block';
+  document.getElementById('loginStep2').style.display='none';
+  L.pin='';L.user=null;
+}
+
+function pinPress(d){
+  if(L.pin.length>=4)return;
+  L.pin+=d;updatePinDots();
+  if(L.pin.length===4)setTimeout(checkPin,120);
+}
+
+function pinBack(){L.pin=L.pin.slice(0,-1);updatePinDots();document.getElementById('loginErr').textContent='';}
+
+function updatePinDots(){
+  for(var i=0;i<4;i++){var el=document.getElementById('pd'+i);if(el)el.classList.toggle('filled',i<L.pin.length);}
+}
+
+async function checkPin(){
+  if(!L.user)return;
+  if(L.setting){
+    var hashed=simpleHash(L.pin);
+    await dbPatch('app_users','id=eq.'+L.user.id,{pin_hash:hashed});
+    L.user.pin_hash=hashed;loginSuccess(L.user);
+  } else {
+    if(simpleHash(L.pin)===L.user.pin_hash){
+      loginSuccess(L.user);
+    } else {
+      document.getElementById('loginErr').textContent='Incorrect PIN. Try again.';
+      L.pin='';updatePinDots();
+    }
+  }
+}
+
+function simpleHash(str){
+  var h=0;for(var i=0;i<str.length;i++){h=Math.imul(31,h)+str.charCodeAt(i)|0;}return String(h>>>0);
+}
+
+function loginSuccess(u){
+  L.user=u;
+  sessionStorage.setItem('rl_user',u.id);
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('mainApp').style.display='flex';
+  // Dispatchers have full access to all features
+  // Only Users management is admin-only
+  document.querySelectorAll('.admin-only').forEach(function(el){
+    el.style.display=u.role==='admin'?'':'none';
+  });
+  var tb=document.getElementById('topbarUser');if(tb)tb.textContent=u.name;
+  toast('Welcome '+u.name,'ok');
+}
+
+function doLogout(){
+  sessionStorage.removeItem('rl_user');L.user=null;L.pin='';
+  document.getElementById('mainApp').style.display='none';
+  document.getElementById('loginScreen').style.display='flex';
+  document.getElementById('loginStep1').style.display='block';
+  document.getElementById('loginStep2').style.display='none';
+  renderLoginUsers();
+}
+
+function renderUserList(){
+  var el=document.getElementById('userList');if(!el)return;
+  el.innerHTML=(S.appUsers||[]).map(function(u){
+    var isMe=L.user&&u.id===L.user.id;
+    return'<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #F3F4F6">'
+      +'<div class="login-avatar" style="width:32px;height:32px;font-size:12px;background:'+(u.color||'#2D6A4F')+'">'+u.name.charAt(0)+'</div>'
+      +'<div style="flex:1"><div style="font-size:12px;font-weight:600">'+u.name+'</div>'
+      +'<div style="font-size:10px;color:#6b7280">'+u.role+(u.pin_hash?' · PIN set':' · No PIN yet')+'</div></div>'
+      +'<div style="display:flex;gap:5px">'
+      +(isMe?'<span style="font-size:10px;color:#6b7280">You</span>':'<button class="btnw" data-action="resetPin" data-uid="'+u.id+'">Reset PIN</button>')
+      +(!isMe&&u.role!=='admin'?'<button class="btnd" data-action="removeUser" data-uid="'+u.id+'">Remove</button>':'')
+      +'</div></div>';
+  }).join('');
+  el.onclick=function(e){
+    var b=e.target.closest('[data-action]');if(!b)return;
+    if(b.dataset.action==='resetPin')resetUserPin(b.dataset.uid);
+    else if(b.dataset.action==='removeUser')removeUser(b.dataset.uid);
+  };
+}
+
+async function resetUserPin(uid){
+  if(!confirm('Reset PIN? They will set a new one on next login.'))return;
+  await dbPatch('app_users','id=eq.'+uid,{pin_hash:null});
+  var u=S.appUsers.find(function(x){return x.id===uid;});if(u)u.pin_hash=null;
+  renderUserList();toast('PIN reset','ok');
+}
+
+async function removeUser(uid){
+  if(!confirm('Remove this user?'))return;
+  await fetch(SUPA+'/rest/v1/app_users?id=eq.'+uid,{method:'DELETE',headers:H});
+  S.appUsers=S.appUsers.filter(function(x){return x.id!==uid;});
+  renderUserList();toast('User removed','ok');
+}
+
+async function addUser(){
+  var name=document.getElementById('newUserName').value.trim();
+  var role=document.getElementById('newUserRole').value;
+  if(!name){toast('Enter a name','err');return;}
+  var color=USER_COLORS[(S.appUsers||[]).length%USER_COLORS.length];
+  var r=await dbInsert('app_users',{name:name,role:role,pin_hash:null,color:color});
+  if(r&&r[0]){
+    S.appUsers.push(r[0]);
+    document.getElementById('newUserName').value='';
+    renderUserList();toast(name+' added. They set PIN on first login.','ok');
+  }
+}
+
+async function autoCleanup(){
+  // Delete completed route_stops older than 90 days
+  // Service history is the permanent record — route_stops only needs current + upcoming stops
+  var cutoff=new Date();
+  cutoff.setDate(cutoff.getDate()-90);
+  var cutoffStr=cutoff.toISOString().split('T')[0];
+  var r=await fetch(SUPA+'/rest/v1/route_stops?status=eq.completed&scheduled_date=lte.'+cutoffStr,{
+    method:'DELETE',headers:H
+  });
+  if(r.ok){
+    // Remove from local memory too
+    var before=S.stops.length;
+    S.stops=S.stops.filter(function(s){return!(s.status==='completed'&&s.scheduled_date&&s.scheduled_date<=cutoffStr);});
+    var removed=before-S.stops.length;
+    if(removed>0)console.log('Cleanup: removed '+removed+' completed stops older than 90 days');
+  }
+  // Delete missed stops older than 30 days — they have been rescheduled or abandoned
+  var missedCutoff=new Date();
+  missedCutoff.setDate(missedCutoff.getDate()-30);
+  var missedStr=missedCutoff.toISOString().split('T')[0];
+  await fetch(SUPA+'/rest/v1/route_stops?status=eq.missed&scheduled_date=lte.'+missedStr,{
+    method:'DELETE',headers:H
+  });
+  S.stops=S.stops.filter(function(s){return!(s.status==='missed'&&s.scheduled_date&&s.scheduled_date<=missedStr);});
+}
+
+async function loadDepts(){S.depts=await dbGet('departments');}
+async function loadDrvs(){S.drvs=await dbGet('drivers');}
+async function loadSvcs(){S.svcs=await dbGet('service_types');}
+async function loadClients(){S.clients=await dbGet('clients')||[];}
+async function loadClientScheds(){S.clientScheds=await dbGet('client_schedules')||[];}
+
+async function loadMonthStops(){
+  // Load only the 3-month window around current calendar month
+  // Use exact month boundaries to keep the query tight
+  var start=new Date(S.calY,S.calM-1,1).toISOString().split('T')[0];
+  var end=new Date(S.calY,S.calM+2,0).toISOString().split('T')[0];
+  // Fetch with high limit to get all stops in range
+  var rows=await dbGet('route_stops','&scheduled_date=gte.'+start+'&scheduled_date=lte.'+end+'&order=scheduled_date.asc,stop_order.asc&limit=2000');
+  // Replace stops in this date range only, keep stops outside it
+  S.stops=S.stops.filter(function(s){return!s.scheduled_date||s.scheduled_date<start||s.scheduled_date>end;});
+  S.stops=S.stops.concat(rows||[]);
+}
+
+function renderAll(){
+  renderDeptPills();
+  updateDeptBadge();
+  updateDepotTxt();
+  renderStatusBar();
+  renderCalendar();
+  populateSelects();
+}
+
+// ═══════════════════════════════════════
+// DEPARTMENTS
+// ═══════════════════════════════════════
+function renderDeptPills(){
+  var el=document.getElementById('deptPills');
+  var html='<div class="dp'+(S.activeDept?'':' on')+'" onclick="setDept(null)"><div class="dot" style="background:#9CA3AF"></div>All</div>';
+  S.depts.forEach(function(d){
+    html+='<div class="dp'+(S.activeDept===d.id?' on':'')+' deptpill" data-id="'+d.id+'" style="cursor:pointer;'+(S.activeDept===d.id?'border:1.5px solid '+(d.color||'#2D6A4F')+';background:#2a4a2a;color:#fff;':'')+'"><div class="dot" style="background:'+(d.color||'#2D6A4F')+'"></div>'+d.name+'</div>';
+  });
+  el.innerHTML=html;
+  // Event delegation for dept pills (avoids quote issues in onclick strings)
+  el.querySelectorAll('.deptpill').forEach(function(pill){
+    pill.addEventListener('click',function(){setDept(this.dataset.id||null);});
+  });
+}
+function setDept(id){S.activeDept=id;S.calDrv=null;renderAll();}
+function getActiveDept(){return S.depts.find(function(d){return d.id===S.activeDept;});}
+function getDepotAddr(deptId){var d=S.depts.find(function(x){return x.id===(deptId||S.activeDept);});return d?d.depot_address||'':'';}
+function getDeptDrivers(deptId){return S.drvs.filter(function(d){return d.department_id===(deptId||S.activeDept);});}
+function updateDeptBadge(){
+  var el=document.getElementById('tdept');
+  var d=getActiveDept();
+  el.textContent=d?d.name:'All';
+  el.style.background=d?(d.color||'#2D6A4F'):'#6b7280';
+}
+function updateDepotTxt(){
+  var d=getActiveDept();
+  document.getElementById('depotTxt').textContent=d?(d.depot_address||'Not set'):'Select a department';
+}
+function renderDeptCards(){
+  var el=document.getElementById('deptCards');
+  if(!S.depts.length){el.innerHTML='<div class="empty"><p>No departments yet</p></div>';return;}
+  var html='';
+  S.depts.forEach(function(dept){
+    var drvs=S.drvs.filter(function(d){return d.department_id===dept.id;});
+    var rows='';
+    drvs.forEach(function(d){
+      rows+='<tr><td><strong>'+d.name+'</strong></td><td>'+(d.zone||'-')+'</td><td>'+((d.service_type_codes||[]).join(',')||'-')+'</td><td>'+d.daily_stop_limit+'</td>';
+      rows+='<td><button class="btn2 bsm" data-a="editDrv" data-id="'+d.id+'">Edit</button> <button class="btnd" data-a="delDrv" data-id="'+d.id+'">x</button></td></tr>';
+    });
+    html+='<div class="card" style="margin-bottom:12px"><div class="card-hdr"><strong>'+dept.name+'</strong>';
+    html+='<div style="display:flex;gap:5px"><button class="btn2 bsm" data-a="addDrv" data-id="'+dept.id+'">+ Driver</button>';
+    html+='<button class="btn2 bsm" data-a="editDept" data-id="'+dept.id+'">Edit</button>';
+    html+='<button class="btnd" data-a="delDept" data-id="'+dept.id+'">Remove</button></div></div>';
+    html+='<div style="padding:10px 14px;font-size:11px;color:#6b7280">'+(dept.depot_address||'No depot set')+'</div>';
+    if(rows){html+='<div style="padding:0 14px 10px"><table class="dt"><thead><tr><th>Name</th><th>Zone</th><th>Services</th><th>Limit</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';}
+    html+='</div>';
+  });
+  el.innerHTML=html;
+  el.onclick=function(e){
+    var b=e.target.closest('[data-a]');if(!b)return;
+    var a=b.dataset.a,id=b.dataset.id;
+    if(a==='editDrv')editDrv(id);else if(a==='delDrv')delDrv(id);
+    else if(a==='editDept')editDept(id);else if(a==='delDept')delDept(id);
+    else if(a==='addDrv')addDrvToDept(id);
+  };
+}
+function clearDeptForm(){
+  document.getElementById('deptMoTitle').textContent='Add Department';
+  document.getElementById('deptEditId').value='';
+  document.getElementById('deptName').value='';
+  document.getElementById('deptCity').value='';
+  document.getElementById('deptDepot').value='';
+  S.selDeptColor=DCOLS[S.depts.length%DCOLS.length];
+  buildCpick('deptCpick','selDeptColor');
+}
+async function editDept(id){
+  var d=S.depts.find(function(x){return x.id===id;});if(!d)return;
+  document.getElementById('deptMoTitle').textContent='Edit Department';
+  document.getElementById('deptEditId').value=id;
+  document.getElementById('deptName').value=d.name;
+  document.getElementById('deptCity').value=d.city||'';
+  document.getElementById('deptDepot').value=d.depot_address||'';
+  S.selDeptColor=d.color||DCOLS[0];
+  buildCpick('deptCpick','selDeptColor');
+  openModal('deptMo');
+}
+async function saveDept(){
+  var name=document.getElementById('deptName').value.trim();
+  if(!name){toast('Enter department name','err');return;}
+  var data={name:name,city:document.getElementById('deptCity').value.trim(),depot_address:document.getElementById('deptDepot').value.trim(),color:S.selDeptColor};
+  var eid=document.getElementById('deptEditId').value;
+  if(eid)await dbPatch('departments','id=eq.'+eid,data);
+  else await dbInsert('departments',data);
+  await loadDepts();renderDeptPills();renderDeptCards();updateDeptBadge();populateSelects();closeModal('deptMo');toast(eid?'Updated':'Department added','ok');
+}
+async function delDept(id){if(!confirm('Remove?'))return;await dbDel('departments',id);await loadDepts();renderDeptPills();renderDeptCards();}
+function addDrvToDept(id){openDrvModal();setTimeout(function(){document.getElementById('drvDept').value=id;},80);}
+
+// DEPOT
+function openDepotModal(){
+  document.getElementById('depotDeptSel').innerHTML=S.depts.map(function(d){return'<option value="'+d.id+'">'+d.name+'</option>';}).join('');
+  if(S.activeDept)document.getElementById('depotDeptSel').value=S.activeDept;
+  loadDepotVal();openModal('depotMo');
+}
+function loadDepotVal(){var d=S.depts.find(function(x){return x.id===document.getElementById('depotDeptSel').value;});document.getElementById('depotVal').value=d?d.depot_address||''  :'';}
+async function saveDepot(){
+  var v=document.getElementById('depotVal').value.trim();
+  var did=document.getElementById('depotDeptSel').value;
+  if(!v||!did){toast('Fill in both fields','err');return;}
+  await dbPatch('departments','id=eq.'+did,{depot_address:v});
+  var d=S.depts.find(function(x){return x.id===did;});if(d)d.depot_address=v;
+  updateDepotTxt();renderDeptCards();closeModal('depotMo');toast('Depot saved','ok');
+}
+
+// ═══════════════════════════════════════
+// DRIVERS
+// ═══════════════════════════════════════
+function renderStatusBar(){
+  var el=document.getElementById('statBar');
+  var drvs=S.activeDept?getDeptDrivers():S.drvs;
+  if(!drvs.length){el.innerHTML='<span style="font-size:10px;color:#9CA3AF">No drivers</span>';return;}
+  var today=new Date().toISOString().split('T')[0];
+  el.innerHTML='<span style="font-size:10px;color:#9CA3AF;flex-shrink:0">Drivers:</span>'+drvs.map(function(d){
+    var cnt=S.stops.filter(function(s){return s.driver_id===d.id&&s.scheduled_date===today;}).length;
+    var lim=d.daily_stop_limit;
+    var col=cnt>=lim?'#DC2626':cnt>=lim*.7?'#D97706':d.color;
+    return '<div style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;border:1.5px solid '+col+';color:'+col+';font-size:11px;font-weight:600;white-space:nowrap;cursor:pointer;flex-shrink:0" onclick="selectCalDrv("+d.id+")"><div style="width:7px;height:7px;border-radius:50%;background:'+col+'"></div>'+d.name+' <span style="font-weight:400;opacity:.8">'+cnt+'/'+lim+'</span></div>';
+  }).join('');
+}
+function renderDrvTable(){
+  var tb=document.getElementById('drvTbl');
+  if(!S.drvs.length){tb.innerHTML='<tr><td colspan="7" style="text-align:center;color:#9CA3AF;padding:20px">No drivers yet</td></tr>';return;}
+  tb.innerHTML=S.drvs.map(function(d){
+    var dept=S.depts.find(function(x){return x.id===d.department_id;});
+    return '<tr><td><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div></td><td><span class="b bg">'+(dept?dept.name:'-')+'</span></td><td>'+(d.zone||'-')+'</td><td>'+(d.service_type_codes||[]).join(', ')||'-'+'</td><td>'+(d.property_types||[]).map(function(p){return p.charAt(0).toUpperCase()+p.slice(1);}).join(', ')||'-'+'</td><td>'+d.daily_stop_limit+'</td><td><div style="display:flex;gap:3px"><button class="btn2 bsm" onclick="editDrv("+d.id+")">Edit</button><button class="btnd" onclick="delDrv("+d.id+")">x</button></div></td></tr>';
+  }).join('');
+}
+function openDrvModal(){
+  document.getElementById('drvMoTitle').textContent='Add Driver';
+  document.getElementById('drvEditId').value='';
+  document.getElementById('drvName').value='';
+  document.getElementById('drvZone').value='';
+  document.getElementById('drvSvc').value='';
+  document.getElementById('drvTime').value=60;
+  document.getElementById('drvLimit').value=15;
+  document.getElementById('ptCom').checked=false;
+  document.getElementById('ptRes').checked=false;
+  S.selColor=COLORS[S.drvs.length%COLORS.length];
+  populateDeptSel('drvDept');buildCpick('drvCpick','selColor');openModal('drvMo');
+}
+async function editDrv(id){
+  var d=S.drvs.find(function(x){return x.id===id;});if(!d)return;
+  document.getElementById('drvMoTitle').textContent='Edit Driver';
+  document.getElementById('drvEditId').value=id;
+  document.getElementById('drvName').value=d.name;
+  document.getElementById('drvZone').value=d.zone||'';
+  document.getElementById('drvSvc').value=(d.service_type_codes||[]).join(', ');
+  document.getElementById('drvTime').value=d.time_per_stop_minutes;
+  document.getElementById('drvLimit').value=d.daily_stop_limit;
+  document.getElementById('ptCom').checked=(d.property_types||[]).includes('commercial');
+  document.getElementById('ptRes').checked=(d.property_types||[]).includes('residential');
+  S.selColor=d.color||COLORS[0];
+  populateDeptSel('drvDept',d.department_id);buildCpick('drvCpick','selColor');openModal('drvMo');
+}
+async function saveDrv(){
+  var name=document.getElementById('drvName').value.trim();
+  if(!name){toast('Enter name','err');return;}
+  var pts=[];
+  if(document.getElementById('ptCom').checked)pts.push('commercial');
+  if(document.getElementById('ptRes').checked)pts.push('residential');
+  var codes=document.getElementById('drvSvc').value.split(',').map(function(s){return s.trim().toUpperCase();}).filter(Boolean);
+  var data={name:name,zone:document.getElementById('drvZone').value.trim(),department_id:document.getElementById('drvDept').value||null,property_types:pts,service_type_codes:codes,time_per_stop_minutes:parseInt(document.getElementById('drvTime').value)||60,daily_stop_limit:parseInt(document.getElementById('drvLimit').value)||15,color:S.selColor};
+  var eid=document.getElementById('drvEditId').value;
+  if(eid)await dbPatch('drivers','id=eq.'+eid,data);
+  else await dbInsert('drivers',data);
+  await loadDrvs();renderDrvTable();renderDeptCards();renderStatusBar();renderCalDrvSel();closeModal('drvMo');toast(eid?'Updated':'Driver added','ok');
+}
+async function delDrv(id){if(!confirm('Remove?'))return;await dbDel('drivers',id);await loadDrvs();renderDrvTable();renderStatusBar();}
+
+// ═══════════════════════════════════════
+// CALENDAR
+// ═══════════════════════════════════════
+function selectCalDrv(id){S.calDrv=S.calDrv===id?null:id;renderStatusBar();renderCalDrvSel();renderCalendar();if(S.selDate)renderDayPanel(S.selDate);}
+function renderCalDrvSel(){
+  var el=document.getElementById('calDrvSel');
+  var drvs=S.activeDept?getDeptDrivers():S.drvs;
+  el.innerHTML='<button class="cdb'+(S.calDrv?'':' on')+'" style="'+(S.calDrv?'':'background:#2D6A4F;color:#fff;border-color:#2D6A4F')+'" onclick="selectCalDrv(null)">All Drivers</button>'+drvs.map(function(d){
+    return '<button class="cdb'+(S.calDrv===d.id?' on':'')+'" style="'+(S.calDrv===d.id?'background:'+d.color+';color:#fff;border-color:'+d.color:'border-color:'+d.color+';color:'+d.color)+'" onclick="selectCalDrv("+d.id+")">'+d.name+'</button>';
+  }).join('');
+}
+function prevMonth(){S.calM--;if(S.calM<0){S.calM=11;S.calY--;}S.selDate=null;document.getElementById('dayPanel').style.display='none';loadMonthStops().then(function(){renderCalendar();renderStatusBar();});}
+function nextMonth(){S.calM++;if(S.calM>11){S.calM=0;S.calY++;}S.selDate=null;document.getElementById('dayPanel').style.display='none';loadMonthStops().then(function(){renderCalendar();renderStatusBar();});}
+
+function renderCalendar(){
+  document.getElementById('calLabel').textContent=new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
+  renderCalDrvSel();
+  var el=document.getElementById('calGrid');
+  var today=new Date().toISOString().split('T')[0];
+  var firstDow=new Date(S.calY,S.calM,1).getDay();
+  var daysInMonth=new Date(S.calY,S.calM+1,0).getDate();
+  var DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  var html=DAY_NAMES.map(function(d,i){return'<div class="chdr'+(i===5?' fri':'')+'">'+(i===5?d+' 🔓':d)+'</div>';}).join('');
+  for(var i=0;i<firstDow;i++)html+='<div class="cc empty nc"></div>';
+  for(var day=1;day<=daysInMonth;day++){
+    var ds=S.calY+'-'+pad(S.calM+1)+'-'+pad(day);
+    var dow=new Date(S.calY,S.calM,day).getDay();
+    var isFri=dow===5,isWknd=dow===0||dow===6;
+    var isToday=ds===today,isSel=ds===S.selDate,isPast=ds<today;
+    var stops=S.stops.filter(function(s){return s.scheduled_date===ds;});
+    if(S.calDrv)stops=stops.filter(function(s){return s.driver_id===S.calDrv;});
+    var cls='cc'+(isFri?' fri nc':isWknd?' empty nc':'')+(isToday?' today':'')+(isSel?' sel':'')+(isPast&&!isToday?' past':'');
+    var drvIds=[...new Set(stops.map(function(s){return s.driver_id;}))];
+    var lines=drvIds.slice(0,3).map(function(did){
+      var d=S.drvs.find(function(x){return x.id===did;});
+      var cnt=stops.filter(function(s){return s.driver_id===did;}).length;
+      var done=stops.filter(function(s){return s.driver_id===did&&s.status==='completed';}).length;
+      var rounds=[...new Set(stops.filter(function(s){return s.driver_id===did&&s.notes;}).map(function(s){return s.notes;}))];
+      var roundStr=rounds.length?' <span style="font-size:8px;font-weight:700;opacity:.8">'+rounds.slice(0,2).join(', ')+'</span>':'';
+      return'<div class="cdl" style="background:'+(d?d.color:'#6b7280')+'22;color:'+(d?d.color:'#6b7280')+'">'+(d?d.name:'?')+': '+done+'/'+cnt+roundStr+'</div>';
+    }).join('');
+    html+='<div class="'+cls+'" '+( (!isFri&&!isWknd)?'onclick="selectDate(this.dataset.ds)" data-ds="'+ds+'"':''  )+'>';
+    html+='<div class="cdn">'+(isToday?'<div class="tbub">'+day+'</div>':day)+'</div>';
+    if(isFri)html+='<div style="font-size:9px;color:#D97706;font-weight:600">OPEN</div>';
+    if(stops.length&&!isFri)html+='<div class="csc">'+stops.length+' stop'+(stops.length!==1?'s':'')+'</div>';
+    html+=lines+'</div>';
+  }
+  el.innerHTML=html;
+}
+
+function pad(n){return n<10?'0'+n:String(n);}
+function selectDate(ds){S.selDate=ds;renderCalendar();renderDayPanel(ds);}
+
+function renderDayPanel(ds){
+  var panel=document.getElementById('dayPanel');
+  var label=new Date(ds+'T12:00:00').toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+  var stops=S.stops.filter(function(s){return s.scheduled_date===ds;});
+  if(S.calDrv)stops=stops.filter(function(s){return s.driver_id===S.calDrv;});
+  var drvIds=[...new Set(stops.map(function(s){return s.driver_id;}))];
+  var html='<div class="dpanel"><div class="dphdr"><div style="font-size:14px;font-weight:700">📅 '+label+'</div><div style="display:flex;gap:5px">';
+  html+='<button class="btn2 bsm" data-a="optimise" data-ds="'+ds+'">🗺 Optimise</button>';
+  html+='<button class="btn2 bsm" data-a="viewMap" data-ds="'+ds+'">View Map</button></div></div>';
+  if(!stops.length){html+='<div class="empty" style="padding:20px"><div class="icon">📋</div><p>No stops</p></div>';}
+  else{
+    drvIds.forEach(function(did){
+      var d=S.drvs.find(function(x){return x.id===did;});if(!d)return;
+      var ds2=stops.filter(function(s){return s.driver_id===did;}).sort(function(a,b){return(a.stop_order||0)-(b.stop_order||0);});
+      var done=ds2.filter(function(s){return s.status==='completed';}).length;
+      html+='<div style="margin-bottom:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">';
+      html+='<div style="width:10px;height:10px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong>';
+      html+='<span class="b '+(done===ds2.length&&ds2.length>0?'bd':'b bg')+'">'+done+'/'+ds2.length+' done</span>';
+      html+='<div style="margin-left:auto;display:flex;gap:4px">';
+      if(done<ds2.length)html+='<button class="btns bsm" data-a="markAllDone" data-drvid="'+did+'" data-ds="'+ds+'">✓ All Done</button>';
+      html+='<button class="btn2 bsm" data-a="dlRoute" data-drvid="'+did+'" data-ds="'+ds+'">📥</button><button class="btn2 bsm" data-a="cpRoute" data-drvid="'+did+'" data-ds="'+ds+'">📋</button></div></div>';
+      ds2.forEach(function(s,i){
+        var svc=S.svcs.find(function(x){return x.id===s.service_type_id;});
+        var isC=s.status==='completed',isM=s.status==='missed';
+        html+='<div class="sr'+(isC?' done':isM?' miss':'')+'" id="sr-'+s.id+'" data-sid="'+s.id+'" draggable="true" ondragstart="dragStart(event,this.dataset.sid)" ondragover="dragOver(event)" ondrop="dropStop(event,this.dataset.sid)">';
+        html+='<div class="sn" style="background:'+(isC?'#16A34A':isM?'#DC2626':d.color)+'">'+(i+1)+'</div>';
+        html+='<div class="sa">'+s.address+'<div class="ss" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">'+(svc?svc.name:'')+(s.property_type&&s.property_type!=='unknown'?' · '+s.property_type:'')+roundBadge(s.notes)+'</div></div>';
+        if(!s.lat)html+='<span class="b bw">!</span>';
+        if(isC)html+='<span class="b bd">Done</span>';
+        if(isM)html+='<span class="b bm">Miss</span>';
+        html+='<div class="sacts">';
+        if(!isC)html+='<button class="btns" data-a="markDone" data-sid="'+s.id+'">✓ Done</button>';
+        else html+='<button class="btn2 bsm" data-a="undoDone" data-sid="'+s.id+'">Undo</button>';
+        if(!isC)html+='<button class="btnw" data-a="markMiss" data-sid="'+s.id+'">Miss</button>';
+        html+='<button class="btn2 bsm" data-a="reassign" data-sid="'+s.id+'" data-ds="'+ds+'" data-addr="'+encodeURIComponent(s.address)+'">Move</button>';
+        html+='<button class="btnd" data-a="delStop" data-sid="'+s.id+'">x</button></div></div>';
+      });
+      html+='</div>';
+    });
+  }
+  html+='</div>';
+  panel.innerHTML=html;
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  // Event delegation for all day panel buttons
+  panel.onclick=function(e){
+    var btn=e.target.closest('[data-a]');if(!btn)return;
+    var a=btn.dataset.a,sid=btn.dataset.sid,drvid=btn.dataset.drvid,bds=btn.dataset.ds;
+    if(a==='markDone')markDone(sid,S.selDate);
+    else if(a==='undoDone')undoDone(sid);
+    else if(a==='markMiss')markMiss(sid);
+    else if(a==='delStop')delStop(sid);
+    else if(a==='reassign'){openReassign(sid,decodeURIComponent(btn.dataset.addr||''),S.selDate);}
+    else if(a==='markAllDone')markAllDone(drvid,bds);
+    else if(a==='dlRoute')dlRoute(drvid,bds);
+    else if(a==='cpRoute')cpRoute(drvid,bds);
+    else if(a==='optimise')runOptimiseDate(bds);
+    else if(a==='viewMap')viewMapDate(bds);
+  };
+}
+
+// ═══════════════════════════════════════
+// STOP ACTIONS
+// ═══════════════════════════════════════
+async function markAllDone(drvId,ds){
+  var pending=S.stops.filter(function(s){return s.driver_id===drvId&&s.scheduled_date===ds&&s.status!=='completed';});
+  if(!pending.length){toast('All stops already completed');return;}
+  toast('Marking '+pending.length+' stops complete...');
+  for(var i=0;i<pending.length;i++){
+    var s=pending[i];
+    await dbPatch('route_stops','id=eq.'+s.id,{status:'completed',completed_at:new Date().toISOString()});
+    s.status='completed';
+    await saveStopToHistory(s);
+  }
+  renderDayPanel(ds);renderCalendar();renderStatusBar();
+  toast(pending.length+' stops marked complete. Next visits scheduled in 45 days.','ok');
+}
+
+async function markDone(id,ds){
+  await dbPatch('route_stops','id=eq.'+id,{status:'completed',completed_at:new Date().toISOString()});
+  var s=S.stops.find(function(x){return x.id===id;});if(s){s.status='completed';}
+  await saveStopToHistory(s);
+  if(S.selDate)renderDayPanel(S.selDate);renderCalendar();renderStatusBar();toast('Stop completed','ok');
+}
+async function undoDone(id){
+  await dbPatch('route_stops','id=eq.'+id,{status:'pending',completed_at:null});
+  var s=S.stops.find(function(x){return x.id===id;});if(s)s.status='pending';
+  if(S.selDate)renderDayPanel(S.selDate);
+}
+async function markMiss(id){
+  await dbPatch('route_stops','id=eq.'+id,{status:'missed'});
+  var s=S.stops.find(function(x){return x.id===id;});if(s)s.status='missed';
+  if(S.selDate)renderDayPanel(S.selDate);renderCalendar();
+}
+async function delStop(id){
+  await dbDel('route_stops',id);
+  S.stops=S.stops.filter(function(x){return x.id!==id;});
+  if(S.selDate)renderDayPanel(S.selDate);renderCalendar();renderStatusBar();
+}
+function openReassign(sid,addr,ds){
+  document.getElementById('reStopId').value=sid;
+  document.getElementById('reassignAddr').textContent=addr;
+  document.getElementById('reDrv').innerHTML=S.drvs.map(function(d){return'<option value="'+d.id+'">'+d.name+'</option>';}).join('');
+  document.getElementById('reDate').value=ds;
+  openModal('reassignMo');
+}
+async function check45Day(address,targetDate){
+  // Returns a warning string if this address was serviced within 45 days of targetDate
+  // Returns null if OK to schedule
+  var cs=S.clientScheds.find(function(x){return x.address&&x.address.toLowerCase()===address.toLowerCase();});
+  if(!cs||!cs.last_service_date)return null;
+  var last=new Date(cs.last_service_date+'T12:00:00');
+  var target=new Date(targetDate+'T12:00:00');
+  var daysSince=Math.floor((target-last)/(1000*60*60*24));
+  if(daysSince<45){
+    return'This address was last serviced '+daysSince+' days ago ('+cs.last_service_date+'). 45 days will not pass until '+cs.next_due_date+'.';
+  }
+  return null;
+}
+
+async function doReassign(){
+  var sid=document.getElementById('reStopId').value;
+  var did=document.getElementById('reDrv').value;
+  var nd=document.getElementById('reDate').value;
+  if(!did||!nd){toast('Select driver and date','err');return;}
+  // Check 45-day rule
+  var s=S.stops.find(function(x){return x.id===sid;});
+  if(s){
+    var warn=await check45Day(s.address,nd);
+    if(warn){
+      if(!confirm(warn+'\n\nSchedule anyway?'))return;
+    }
+  }
+  var cnt=S.stops.filter(function(x){return x.driver_id===did&&x.scheduled_date===nd;}).length;
+  await dbPatch('route_stops','id=eq.'+sid,{driver_id:did,scheduled_date:nd,day_of_week:dayName(nd),stop_order:cnt+1,status:'pending'});
+  if(s){s.driver_id=did;s.scheduled_date=nd;s.stop_order=cnt+1;s.status='pending';}
+  if(S.selDate)renderDayPanel(S.selDate);renderCalendar();renderStatusBar();closeModal('reassignMo');toast('Rescheduled');
+}
+
+var dragId=null;
+function dragStart(e,id){dragId=id;setTimeout(function(){var el=document.getElementById('sr-'+id);if(el)el.classList.add('dragging');},0);}
+function dragOver(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
+async function dropStop(e,targetId){
+  e.preventDefault();e.currentTarget.classList.remove('drag-over');
+  if(!dragId||dragId===targetId)return;
+  var a=S.stops.find(function(s){return s.id===dragId;}),b=S.stops.find(function(s){return s.id===targetId;});
+  if(!a||!b)return;
+  var tmp=a.stop_order;a.stop_order=b.stop_order;b.stop_order=tmp;
+  await dbPatch('route_stops','id=eq.'+a.id,{stop_order:a.stop_order});
+  await dbPatch('route_stops','id=eq.'+b.id,{stop_order:b.stop_order});
+  var el=document.getElementById('sr-'+dragId);if(el)el.classList.remove('dragging');
+  dragId=null;if(S.selDate)renderDayPanel(S.selDate);
+}
+
+// ═══════════════════════════════════════
+// GEOCODE + OPTIMISE
+// ═══════════════════════════════════════
+function runOptimise(){if(S.selDate)runOptimiseDate(S.selDate);else toast('Click a date on the calendar first','err');}
+
+async function runOptimiseDate(ds){
+  var stops=S.stops.filter(function(s){return s.scheduled_date===ds;});
+  if(!stops.length){toast('No stops for this date','err');return;}
+
+  // Geocode missing
+  var missing=stops.filter(function(s){return!s.lat||!s.lng;});
+  if(missing.length){
+    toast('Geocoding '+missing.length+' addresses...');
+    var done=0;
+    for(var i=0;i<missing.length;i++){
+      var s=missing[i];
+      var drv=S.drvs.find(function(x){return x.id===s.driver_id;});
+      var g=await geocodeAddr(s.address,drv?drv.department_id:null);
+      if(g){s.lat=g.lat;s.lng=g.lng;await dbPatch('route_stops','id=eq.'+s.id,{lat:g.lat,lng:g.lng});done++;}
+      await sleep(120);
+    }
+    toast('Geocoded '+done+'/'+missing.length);
+  }
+
+  // Rebalance zones between north/south drivers
+  var depts=S.activeDept?[S.depts.find(function(x){return x.id===S.activeDept;})]:S.depts;
+  for(var di=0;di<depts.length;di++){
+    var dept=depts[di];if(!dept||!dept.depot_address)continue;
+    var deptDrvs=S.drvs.filter(function(d){return d.department_id===dept.id;});
+    var nDrvs=deptDrvs.filter(function(d){return(d.zone||'').toLowerCase().includes('north');});
+    var sDrvs=deptDrvs.filter(function(d){return(d.zone||'').toLowerCase().includes('south');});
+    if(!nDrvs.length||!sDrvs.length)continue;
+    var deptStops=stops.filter(function(s){return s.lat&&s.lng&&deptDrvs.some(function(d){return d.id===s.driver_id;});});
+    if(!deptStops.length)continue;
+    var lats=deptStops.map(function(s){return s.lat;});
+    var midLat=(Math.min.apply(null,lats)+Math.max.apply(null,lats))/2;
+    var swapped=0;
+    for(var si=0;si<deptStops.length;si++){
+      var stop=deptStops[si];
+      var drv2=deptDrvs.find(function(d){return d.id===stop.driver_id;});if(!drv2)continue;
+      var drvN=(drv2.zone||'').toLowerCase().includes('north');
+      var drvS=(drv2.zone||'').toLowerCase().includes('south');
+      var stopN=stop.lat>midLat;
+      var target=null;
+      if(drvN&&!stopN){
+        target=sDrvs.filter(function(d){return S.stops.filter(function(x){return x.driver_id===d.id&&x.scheduled_date===ds;}).length<(S.limMap[d.id]||d.daily_stop_limit);}).sort(function(a,b){return S.stops.filter(function(x){return x.driver_id===a.id&&x.scheduled_date===ds;}).length-S.stops.filter(function(x){return x.driver_id===b.id&&x.scheduled_date===ds;}).length;})[0];
+      } else if(drvS&&stopN){
+        target=nDrvs.filter(function(d){return S.stops.filter(function(x){return x.driver_id===d.id&&x.scheduled_date===ds;}).length<(S.limMap[d.id]||d.daily_stop_limit);}).sort(function(a,b){return S.stops.filter(function(x){return x.driver_id===a.id&&x.scheduled_date===ds;}).length-S.stops.filter(function(x){return x.driver_id===b.id&&x.scheduled_date===ds;}).length;})[0];
+      }
+      if(target){await dbPatch('route_stops','id=eq.'+stop.id,{driver_id:target.id});stop.driver_id=target.id;swapped++;}
+    }
+    if(swapped>0)toast('Rebalanced '+swapped+' stops');
+  }
+
+  // Optimise each driver's route
+  if(!S.gmReady){toast('Google Maps loading...','err');return;}
+  toast('Optimising routes...');
+  var deptDrvIds=[...new Set(stops.map(function(s){return s.driver_id;}))];
+  for(var k=0;k<deptDrvIds.length;k++){
+    var did=deptDrvIds[k];
+    var d=S.drvs.find(function(x){return x.id===did;});if(!d)continue;
+    var dStops=S.stops.filter(function(s){return s.driver_id===did&&s.scheduled_date===ds&&s.lat&&s.lng;});
+    if(!dStops.length)continue;
+    var dept2=S.depts.find(function(x){return x.id===d.department_id;});
+    toast('Optimising '+d.name+' ('+dStops.length+' stops)...');
+    var ordered=await optimiseRoute(dStops,dept2?dept2.depot_address:null);
+    for(var oi=0;oi<ordered.length;oi++){
+      ordered[oi].stop_order=oi+1;
+      await dbPatch('route_stops','id=eq.'+ordered[oi].id,{stop_order:oi+1});
+      var ss=S.stops.find(function(x){return x.id===ordered[oi].id;});if(ss)ss.stop_order=oi+1;
+    }
+    await sleep(300);
+  }
+  renderCalendar();renderStatusBar();if(S.selDate===ds)renderDayPanel(ds);
+  toast('Routes optimised','ok');
+}
+
+// ═══════════════════════════════════════
+// GEOCODING
+// ═══════════════════════════════════════
+function getCityState(deptId){
+  var dept=S.depts.find(function(x){return x.id===(deptId||S.activeDept);});
+  var depot=dept?dept.depot_address||'':'';
+  if(!depot)return'Gainesville, FL';
+  var parts=depot.split(',').map(function(p){return p.trim();}).filter(Boolean);
+  for(var i=0;i<parts.length;i++){
+    if(/^[A-Z]{2}(\s+\d{5})?$/.test(parts[i]||'')){return(parts[i-1]||'Gainesville')+', '+parts[i];}
+  }
+  return parts.length>=2?parts.slice(-2).join(', '):'Gainesville, FL';
+}
+async function geocodeRaw(addr){
+  try{
+    var r=await fetch('https://maps.googleapis.com/maps/api/geocode/json?address='+encodeURIComponent(addr)+'&key='+GKEY);
+    var d=await r.json();
+    if(d.status==='OK'&&d.results&&d.results.length){var l=d.results[0].geometry.location;return{lat:l.lat,lng:l.lng};}
+  }catch(e){}
+  return null;
+}
+async function geocodeAddr(addr,deptId){
+  try{
+    var full=addr.trim();
+    if(!/,\s*[A-Za-z]{2,}/.test(full))full+=', '+getCityState(deptId);
+    var r=await fetch('https://maps.googleapis.com/maps/api/geocode/json?address='+encodeURIComponent(full)+'&key='+GKEY);
+    var d=await r.json();
+    if(d.status==='OK'&&d.results&&d.results.length){var l=d.results[0].geometry.location;return{lat:l.lat,lng:l.lng};}
+  }catch(e){console.error('geocode error',addr,e);}
+  return null;
+}
+
+// ═══════════════════════════════════════
+// ROUTE OPTIMISATION
+// ═══════════════════════════════════════
+function hdist(a,b){
+  var R=6371,dLat=(b.lat-a.lat)*Math.PI/180,dLng=(b.lng-a.lng)*Math.PI/180;
+  var x=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+function nnSort(stops,origin){
+  if(!stops.length)return stops;
+  var cur=origin||{lat:stops[0].lat,lng:stops[0].lng};
+  var rem=stops.slice(),ord=[];
+  while(rem.length){
+    var ni=0,nd=Infinity;
+    for(var i=0;i<rem.length;i++){var d=hdist(cur,rem[i]);if(d<nd){nd=d;ni=i;}}
+    ord.push(rem[ni]);cur={lat:rem[ni].lat,lng:rem[ni].lng};rem.splice(ni,1);
+  }
+  return ord;
+}
+async function optimiseRoute(stops,depotAddr){
+  if(!stops.length)return stops;
+  if(!S.gmReady)return nnSort(stops,null);
+  var depotGeo=depotAddr?await geocodeRaw(depotAddr):null;
+  var origin=depotGeo
+    ?new google.maps.LatLng(depotGeo.lat,depotGeo.lng)
+    :new google.maps.LatLng(stops[0].lat,stops[0].lng);
+
+  // Google Directions supports up to 23 waypoints per request (25 total minus origin/dest)
+  // For 23 stops or fewer: single request — Google solves the full route
+  if(stops.length<=23){
+    return new Promise(function(resolve){
+      new google.maps.DirectionsService().route({
+        origin:origin,
+        destination:origin, // return to depot
+        waypoints:stops.map(function(s){return{location:new google.maps.LatLng(s.lat,s.lng),stopover:true};}),
+        optimizeWaypoints:true,
+        travelMode:google.maps.TravelMode.DRIVING,
+        drivingOptions:{departureTime:new Date(new Date().setHours(7,0,0,0)),trafficModel:google.maps.TrafficModel.BEST_GUESS}
+      },function(result,status){
+        if(status==='OK'&&result.routes[0]&&result.routes[0].waypoint_order){
+          resolve(result.routes[0].waypoint_order.map(function(i){return stops[i];}));
+        } else {
+          console.warn('Directions failed:',status,'- using NN fallback');
+          resolve(nnSort(stops,depotGeo));
+        }
+      });
+    });
+  }
+
+  // More than 23 stops: NN sort is the best we can do without multiple API calls
+  // The dispatcher should run optimise per-day which keeps stops under 23
+  return nnSort(stops,depotGeo);
+}
+
+// ═══════════════════════════════════════
+// IMPORT
+// ═══════════════════════════════════════
+function openImport(){
+  populateSelects();
+  S.upData=null;
+  document.getElementById('impPreview').style.display='none';
+  document.getElementById('impDepotRow').style.display='none';
+  // Default start date to next Monday
+  var d=new Date();
+  var dow=d.getDay();
+  var daysToMon=dow===0?1:dow===1?0:dow===2?6:dow===3?5:dow===4?4:dow===5?3:2;
+  d.setDate(d.getDate()+daysToMon);
+  document.getElementById('impStartDate').value=d.toISOString().split('T')[0];
+  if(S.activeDept){document.getElementById('impDept').value=S.activeDept;onImpDeptChange();}
+  openModal('importMo');
+}
+function onImpDeptChange(){
+  var did=document.getElementById('impDept').value;
+  var dept=S.depts.find(function(x){return x.id===did;});
+  var row=document.getElementById('impDepotRow');
+  var txt=document.getElementById('impDepotTxt');
+  if(dept){
+    row.style.display='block';
+    txt.textContent=dept.depot_address||'Not set - edit in Departments';
+    txt.style.color=dept.depot_address?'#374151':'#DC2626';
+  } else row.style.display='none';
+  // Build driver checkboxes
+  var drvs=did?S.drvs.filter(function(d){return d.department_id===did;}):S.drvs;
+  document.getElementById('drvChecks').innerHTML=drvs.map(function(d){
+    return'<div class="dchk" data-drvid="'+d.id+'" style="cursor:pointer"><div style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="dc-'+d.id+'" style="width:auto;accent-color:'+d.color+'"><div style="width:10px;height:10px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong><span style="font-size:10px;color:#6b7280">'+( d.zone||'')+'</span></div><div style="display:flex;gap:4px">'+(d.service_type_codes||[]).map(function(c){return'<span class="b bb">'+c+'</span>';}).join('')+'</div></div>';
+  }).join('');
+  // Event delegation for driver checkboxes
+  document.getElementById('drvChecks').onclick=function(e){
+    var row=e.target.closest('[data-drvid]');
+    if(!row)return;
+    var chk=document.getElementById('dc-'+row.dataset.drvid);
+    if(chk&&e.target!==chk)chk.checked=!chk.checked;
+  };
+}
+function onDragOver(e){e.preventDefault();document.getElementById('uzone').classList.add('over');}
+function onDrop(e){e.preventDefault();document.getElementById('uzone').classList.remove('over');var f=e.dataTransfer.files[0];if(f)processFile(f);}
+function onFile(e){var f=e.target.files[0];if(f)processFile(f);}
+function processFile(file){
+  var r=new FileReader();
+  r.onload=function(e){
+    var wb=XLSX.read(e.target.result,{type:'array'});
+    var ws=wb.Sheets[wb.SheetNames[0]];
+    var data=XLSX.utils.sheet_to_json(ws,{header:1});
+    if(!data.length){toast('File empty','err');return;}
+    S.upData=data;S.upHeaders=data[0].map(String);
+    var hdrs=S.upHeaders;
+    function fc(kws){var i=hdrs.findIndex(function(h){return kws.some(function(k){return h.toLowerCase().includes(k.toLowerCase());});});return i>=0?String(i):'';}
+    var none='<option value="">None</option>';
+    var opts=hdrs.map(function(h,i){return'<option value="'+i+'">'+String.fromCharCode(65+i)+': '+h+'</option>';}).join('');
+    ['cAddr','cCity','cZip','cState','cSvc'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=(id==='cAddr'?'':none)+opts;});
+    var da=fc(['property address','address','street']);if(da)document.getElementById('cAddr').value=da;
+    var dc=fc(['city','municipality']);if(dc)document.getElementById('cCity').value=dc;
+    var dz=fc(['zip','postal']);if(dz)document.getElementById('cZip').value=dz;
+    var dst=fc(['state','st']);if(dst)document.getElementById('cState').value=dst;
+    var dsv=fc(['service type','service']);if(dsv)document.getElementById('cSvc').value=dsv;
+    // Stop limit editor
+    var did=document.getElementById('impDept').value;
+    var drvs=did?S.drvs.filter(function(d){return d.department_id===did;}):S.drvs;
+    document.getElementById('limEditor').innerHTML=drvs.map(function(d){
+      return'<div class="slrow"><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div><div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:#6b7280">Max/day:</span><input type="number" id="lim-'+d.id+'" value="'+(S.limMap[d.id]||d.daily_stop_limit)+'" min="1" max="50" style="width:55px;padding:3px 6px;font-size:11px" oninput="S.limMap[this.id.slice(4)]=parseInt(this.value)||15"></div></div>';
+    }).join('');
+    // Preview
+    var prev=data.slice(0,5);
+    document.getElementById('prevTbl').innerHTML='<table class="dt">'+prev.map(function(row,ri){return'<tr style="background:'+(ri===0?'#F9FAFB':'#fff')+'">'+row.map(function(c,ci){return'<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">'+(ri===0?'<strong>'+String.fromCharCode(65+ci)+': '+(c||'')+'</strong>':(c||''))+'</td>';}).join('')+'</tr>';}).join('')+'</table>';
+    document.getElementById('impPreview').style.display='block';
+  };
+  r.readAsArrayBuffer(file);
+}
+
+async function doImport(){
+  if(!S.upData){toast('Upload a file first','err');return;}
+  var deptId=document.getElementById('impDept').value;
+  if(!deptId){toast('Select a department first','err');return;}
+  var dept=S.depts.find(function(x){return x.id===deptId;});
+  if(!dept||!dept.depot_address){toast('Set depot address for '+( dept?dept.name:'this department')+' first','err');return;}
+
+  // Get selected drivers
+  var allDeptDrvs=S.drvs.filter(function(d){return d.department_id===deptId;});
+  var selDrvs=allDeptDrvs.filter(function(d){var chk=document.getElementById('dc-'+d.id);return chk&&chk.checked;});
+  if(!selDrvs.length){toast('Check at least one driver for this import','err');return;}
+
+  // Read limits
+  selDrvs.forEach(function(d){var el=document.getElementById('lim-'+d.id);if(el)S.limMap[d.id]=parseInt(el.value)||d.daily_stop_limit;});
+
+  // Parse rows
+  var ac=parseInt(document.getElementById('cAddr').value);
+  var cc=document.getElementById('cCity').value;
+  var zc=document.getElementById('cZip').value;
+  var sc=document.getElementById('cState').value;
+  var svc=document.getElementById('cSvc').value;
+
+  var items=S.upData.slice(1).map(function(row){
+    var street=String(row[ac]||'').trim();if(!street||street.length<3)return null;
+    var city=cc!==''?String(row[parseInt(cc)]||'').trim():'';
+    var zip=zc!==''?String(row[parseInt(zc)]||'').trim():'';
+    var state=sc!==''?String(row[parseInt(sc)]||'').trim():'';
+    var parts=[street];
+    if(city)parts.push(city);
+    if(state&&zip)parts.push(state+' '+zip);else if(state)parts.push(state);else if(zip)parts.push(zip);
+    if(!/,\s*[A-Za-z]{2,}/.test(parts.join(', ')))parts.push(getCityState(deptId));
+    return{address:parts.join(', '),svcType:svc!==''?String(row[parseInt(svc)]||'').trim():'',lat:null,lng:null};
+  }).filter(Boolean);
+
+  if(!items.length){toast('No valid addresses found','err');return;}
+  closeModal('importMo');
+  toast('Geocoding '+items.length+' addresses... This may take a few minutes.');
+
+  // Step 1: Geocode all
+  var geocoded=0;
+  for(var i=0;i<items.length;i++){
+    var g=await geocodeAddr(items[i].address,deptId);
+    if(g){items[i].lat=g.lat;items[i].lng=g.lng;geocoded++;}
+    await sleep(120);
+    if((i+1)%20===0)toast('Geocoding... '+(i+1)+'/'+items.length);
+  }
+  toast('Geocoded '+geocoded+'/'+items.length+'. Building schedule...');
+
+  // Step 2: Cluster ALL geocoded stops together geographically first
+  // Then split clusters between drivers so each driver gets a tight geographic area per day
+  var depotGeo=await geocodeRaw(dept.depot_address);
+  var geoItems=items.filter(function(i){return i.lat&&i.lng;});
+
+  // Get stop limits per driver
+  var lims={};
+  selDrvs.forEach(function(d){lims[d.id]=S.limMap[d.id]||d.daily_stop_limit||15;});
+  var minLim=Math.min.apply(null,selDrvs.map(function(d){return lims[d.id];}));
+
+  // Filter by service type if drivers have specific codes
+  // (e.g. LHT drivers get LHT stops, ORN drivers get ORN stops)
+  var svcFiltered=geoItems;
+  var drvCodes=[];
+  selDrvs.forEach(function(d){(d.service_type_codes||[]).forEach(function(c){if(!drvCodes.includes(c.toUpperCase()))drvCodes.push(c.toUpperCase());});});
+  if(drvCodes.length){
+    var withCode=geoItems.filter(function(i){
+      var c=(i.svcType||'').trim().toUpperCase().match(/^([A-Z]+)/);
+      return c&&drvCodes.includes(c[1]);
+    });
+    if(withCode.length)svcFiltered=withCode;
+  }
+
+  // Cluster all stops into groups of minLim — each cluster = one driver-day
+  var allClusters=geoCluster(svcFiltered,minLim,depotGeo);
+
+  // Assign clusters to drivers alternately across work dates
+  // This ensures each driver gets geographically tight clusters on different days
+  var schedule=[];
+  var workDates=getWorkDates(90,document.getElementById('impStartDate').value||null);
+  var drvDateUsed={};
+  selDrvs.forEach(function(d){drvDateUsed[d.id]=new Set();});
+
+  allClusters.forEach(function(cluster,ci){
+    // Alternate drivers: cluster 0 -> driver 0, cluster 1 -> driver 1, cluster 2 -> driver 0...
+    var drv=selDrvs[ci%selDrvs.length];
+    var lim=lims[drv.id];
+    // If cluster is bigger than this driver's limit, split it
+    if(cluster.length>lim){
+      for(var start=0;start<cluster.length;start+=lim){
+        var sub=cluster.slice(start,start+lim);
+        var date=workDates.find(function(d){return!drvDateUsed[drv.id].has(d);});
+        if(!date)return;
+        drvDateUsed[drv.id].add(date);
+        schedule.push({drvId:drv.id,date:date,stops:sub});
+      }
+    } else {
+      var date=workDates.find(function(d){return!drvDateUsed[drv.id].has(d);});
+      if(!date)return;
+      drvDateUsed[drv.id].add(date);
+      schedule.push({drvId:drv.id,date:date,stops:cluster});
+    }
+  });
+
+  if(!schedule.length){
+    toast('No stops could be scheduled. Check drivers have correct zones set.','err');
+    console.error('Schedule empty. Items:',items.length,'Geocoded:',geocoded,'Drivers:',selDrvs.map(function(d){return d.name;}));
+    return;
+  }
+
+  // Step 4: Save to DB
+  toast('Saving '+schedule.reduce(function(s,d){return s+d.stops.length;},0)+' stops...');
+  var saved=0;
+  for(var di=0;di<schedule.length;di++){
+    var day=schedule[di];
+    var svcObj=S.svcs.find(function(s){return s.name.toLowerCase().startsWith((day.stops[0].svcType||'').split(' ')[0].toLowerCase());});
+    for(var si=0;si<day.stops.length;si++){
+      var item=day.stops[si];
+      var r=await dbInsert('route_stops',{
+        driver_id:day.drvId,
+        address:item.address,
+        lat:item.lat,
+        lng:item.lng,
+        property_type:(item.address.match(/^\d+\s/)?'residential':'commercial'),
+        scheduled_date:day.date,
+        day_of_week:dayName(day.date),
+        stop_order:si+1,
+        status:'pending',
+        service_type_id:svcObj?svcObj.id:null,
+        notes:item.svcType||null
+      });
+      if(r&&r.length){S.stops.push(r[0]);saved++;}
+    }
+    if(saved%50===0&&saved>0)toast('Saved '+saved+'...');
+  }
+
+  // Navigate to first scheduled month
+  if(schedule.length>0){
+    var first=new Date(schedule[0].date+'T12:00:00');
+    S.calY=first.getFullYear();S.calM=first.getMonth();
+  }
+  await loadMonthStops();
+  renderCalendar();renderStatusBar();
+  var weeks=Math.ceil(schedule.length/4);
+  toast(saved+' stops scheduled across ~'+weeks+' weeks ('+schedule[0].date+' to '+schedule[schedule.length-1].date+')','ok');
+}
+
+function assignDriver(item,pool){
+  var up=item.address.toUpperCase();
+  var code=(item.svcType||'').trim().toUpperCase().match(/^([A-Z]+)/);
+  code=code?code[1]:null;
+  // Filter by service type
+  var p=pool;
+  if(code){var m=p.filter(function(d){return(d.service_type_codes||[]).map(function(c){return c.toUpperCase();}).includes(code);});if(m.length)p=m;}
+  if(!p.length)p=pool;
+  // Filter by zone from address
+  var isN=/NW|NE|NORTH/.test(up)||(/ALACHUA|NEWBERRY/.test(up)&&!/SW/.test(up));
+  var isS=/SW|SE|SOUTH/.test(up);
+  if(isN){var mn=p.filter(function(d){return(d.zone||'').toLowerCase().includes('north');});if(mn.length)return mn[0];}
+  if(isS){var ms=p.filter(function(d){return(d.zone||'').toLowerCase().includes('south');});if(ms.length)return ms[0];}
+  return p[0]||null;
+}
+
+function geoCluster(items,maxSize,depotGeo){
+  if(!items.length)return[];
+  var origin=depotGeo||{lat:items[0].lat,lng:items[0].lng};
+  var pool=items.map(function(item,i){return Object.assign({},item,{_i:i});});
+  pool.sort(function(a,b){return hdist(origin,a)-hdist(origin,b);});
+  var used=new Set();var clusters=[];
+  for(var i=0;i<pool.length;i++){
+    if(used.has(pool[i]._i))continue;
+    used.add(pool[i]._i);
+    var cluster=[pool[i]];
+    while(cluster.length<maxSize){
+      var last=cluster[cluster.length-1];var best=null;var bestD=Infinity;
+      for(var j=0;j<pool.length;j++){
+        if(used.has(pool[j]._i))continue;
+        var d=hdist(last,pool[j]);if(d<bestD){bestD=d;best=pool[j];}
+      }
+      if(!best)break;
+      used.add(best._i);cluster.push(best);
+    }
+    // Order stops within cluster using nearest-neighbour from depot
+    // so route sweeps outward without backtracking
+    var ordered=[];
+    var cur=origin;
+    var rem=cluster.slice();
+    while(rem.length){
+      var ni=0;var nd=Infinity;
+      for(var k=0;k<rem.length;k++){var dk=hdist(cur,rem[k]);if(dk<nd){nd=dk;ni=k;}}
+      ordered.push(rem[ni]);cur={lat:rem[ni].lat,lng:rem[ni].lng};rem.splice(ni,1);
+    }
+    clusters.push(ordered);
+  }
+  return clusters;
+}
+
+function getWorkDates(maxDays,startDate){
+  var dates=[];
+  var cursor=startDate?new Date(startDate+'T12:00:00'):new Date();
+  cursor.setHours(12,0,0,0);
+  // If start date falls on Fri/Sat/Sun push to next Monday
+  var d=cursor.getDay();
+  if(d===5)cursor.setDate(cursor.getDate()+3);
+  else if(d===6)cursor.setDate(cursor.getDate()+2);
+  else if(d===0)cursor.setDate(cursor.getDate()+1);
+  var count=0;
+  while(dates.length<maxDays&&count<maxDays*3){
+    var wd=cursor.getDay();
+    if(wd>=1&&wd<=4)dates.push(cursor.toISOString().split('T')[0]);
+    cursor.setDate(cursor.getDate()+1);count++;
+  }
+  return dates;
+}
+function dayName(ds){return['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][new Date(ds+'T12:00:00').getDay()];}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+
+// ═══════════════════════════════════════
+// HISTORY & RECURRING
+// ═══════════════════════════════════════
+function parseRound(notes){
+  // Parses "LHT 5" or "LHT5" -> {code:'LHT', round:5}
+  // Returns null if no round found
+  if(!notes)return null;
+  var m=notes.trim().toUpperCase().match(/^([A-Z]+)\s*(\d+)$/);
+  if(!m)return null;
+  return{code:m[1],round:parseInt(m[2])};
+}
+function nextRound(notes,maxRound){
+  // Increments round, resets to 1 after maxRound
+  maxRound=maxRound||6;
+  var p=parseRound(notes);
+  if(!p)return notes; // No round info, keep as-is
+  var next=p.round>=maxRound?1:p.round+1;
+  return p.code+' '+next;
+}
+function roundBadge(notes){
+  // Returns HTML badge for round number, or empty string
+  if(!notes)return'';
+  var p=parseRound(notes);
+  if(!p)return'<span class="b bg" style="font-size:9px">'+notes+'</span>';
+  var colors={1:'#6B7280',2:'#2563EB',3:'#7C3AED',4:'#D97706',5:'#DC2626',6:'#059669'};
+  var col=colors[p.round]||'#6B7280';
+  return'<span class="b" style="background:'+col+'22;color:'+col+';font-size:9px;border:1px solid '+col+'55">'+p.code+' '+p.round+(p.round===6?'★':'')+'</span>';
+}
+
+async function saveStopToHistory(s){
+  if(!s||!s.address)return;
+  var INTERVAL=45; // days between services
+
+  // Find or create client record
+  var ex=await dbGet('clients','&address=eq.'+encodeURIComponent(s.address)+'&limit=1');
+  var cid=ex&&ex[0]?ex[0].id:null;
+  if(!cid){
+    var nc=await dbInsert('clients',{address:s.address,property_type:s.property_type||'unknown'});
+    cid=nc&&nc[0]?nc[0].id:null;
+  }
+  if(!cid)return;
+
+  // Save service history record
+  var svcDate=s.scheduled_date||new Date().toISOString().split('T')[0];
+  await dbInsert('service_history',{
+    client_id:cid,driver_id:s.driver_id,
+    service_type_id:s.service_type_id||null,
+    service_date:svcDate,is_early:false,is_unscheduled:false,notes:'Completed'
+  });
+
+  // Calculate next due date: 45 days from completion
+  var nextDue=new Date(svcDate+'T12:00:00');
+  nextDue.setDate(nextDue.getDate()+INTERVAL);
+  var nextDueStr=nextDue.toISOString().split('T')[0];
+
+  // Always check DB directly for existing schedule to avoid duplicates
+  var existingScheds=await dbGet('client_schedules','&client_id=eq.'+cid+'&limit=1');
+  var exSched=existingScheds&&existingScheds[0]?existingScheds[0]:S.clientScheds.find(function(cs){return cs.client_id===cid;});
+
+  if(exSched){
+    await dbPatch('client_schedules','id=eq.'+exSched.id,{
+      last_service_date:svcDate,
+      next_due_date:nextDueStr,
+      typical_interval_days:INTERVAL,
+      visit_count:(exSched.visit_count||0)+1,
+      driver_id:s.driver_id
+    });
+    exSched.last_service_date=svcDate;
+    exSched.next_due_date=nextDueStr;
+    // Update in memory too
+    var mi=S.clientScheds.findIndex(function(cs){return cs.client_id===cid;});
+    if(mi>=0)S.clientScheds[mi]=Object.assign(S.clientScheds[mi],{last_service_date:svcDate,next_due_date:nextDueStr});
+  } else {
+    var nr=await dbInsert('client_schedules',{
+      client_id:cid,address:s.address,
+      typical_interval_days:INTERVAL,
+      last_service_date:svcDate,
+      next_due_date:nextDueStr,
+      driver_id:s.driver_id,
+      service_type_id:s.service_type_id||null,
+      visit_count:1,is_urgent:false
+    });
+    if(nr&&nr[0])S.clientScheds.push(nr[0]);
+  }
+
+  // Auto-schedule next visit on the calendar 45 days from now
+  var nextNotes=nextRound(s.notes,6); // Increment round: LHT 5 -> LHT 6, LHT 6 -> LHT 1
+  var futureWorkDates=getWorkDates(120,nextDueStr);
+  var targetDate=futureWorkDates.find(function(d){
+    return S.stops.filter(function(x){return x.driver_id===s.driver_id&&x.scheduled_date===d;}).length<(S.limMap[s.driver_id]||15);
+  });
+  if(targetDate){
+    var cnt=S.stops.filter(function(x){return x.driver_id===s.driver_id&&x.scheduled_date===targetDate;}).length;
+    var nr2=await dbInsert('route_stops',{
+      driver_id:s.driver_id,
+      address:s.address,
+      lat:s.lat,lng:s.lng,
+      property_type:s.property_type||'unknown',
+      scheduled_date:targetDate,
+      day_of_week:dayName(targetDate),
+      stop_order:cnt+1,
+      status:'pending',
+      service_type_id:s.service_type_id||null,
+      notes:nextNotes
+    });
+    if(nr2&&nr2[0]){
+      S.stops.push(nr2[0]);
+      // Navigate calendar to show the newly scheduled month
+      var targetM=new Date(targetDate+'T12:00:00');
+      if(targetM.getFullYear()!==S.calY||targetM.getMonth()!==S.calM){
+        S.calY=targetM.getFullYear();S.calM=targetM.getMonth();
+        await loadMonthStops();
+      }
+      renderCalendar();renderStatusBar();
+      toast('Next visit auto-scheduled for '+targetDate+' ('+nextNotes+')','ok');
+    }
+  }
+}
+async function renderDueSoon(){
+  var el=document.getElementById('dueSoonContent');
+  var today=new Date().toISOString().split('T')[0];
+  var future=new Date();future.setDate(future.getDate()+14);
+  var cutoff=future.toISOString().split('T')[0];
+  var due=S.clientScheds.filter(function(cs){return cs.next_due_date&&(cs.next_due_date<=cutoff||cs.is_urgent);});
+  due.sort(function(a,b){if(a.is_urgent&&!b.is_urgent)return-1;if(!a.is_urgent&&b.is_urgent)return 1;return a.next_due_date>b.next_due_date?1:-1;});
+  if(!due.length){el.innerHTML='<div class="empty"><div class="icon">⏰</div><p>No clients due soon</p></div>';return;}
+  el.innerHTML=due.map(function(cs){
+    var drv=S.drvs.find(function(x){return x.id===cs.driver_id;});
+    var days=Math.ceil((new Date(cs.next_due_date)-new Date())/(1000*60*60*24));
+    var isOver=cs.next_due_date<today;
+    return'<div style="background:#fff;border:1px solid #E2E5EA;border-radius:7px;padding:10px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div style="flex:1"><div style="font-size:12px;font-weight:600">'+cs.address+'</div><div style="font-size:10px;color:#6b7280;margin-top:2px">'+(drv?drv.name:'Unassigned')+' · Last: '+(cs.last_service_date||'Never')+'</div></div>'+(cs.is_urgent?'<span class="b bm">URGENT</span>':isOver?'<span class="b bm">Overdue</span>':'<span class="b bw">'+days+'d</span>')+'<button class="btn bsm" onclick="quickSchedule("+cs.id+")">Schedule</button></div>';
+  }).join('');
+}
+async function quickSchedule(schedId){
+  var cs=S.clientScheds.find(function(x){return x.id===schedId;});if(!cs||!cs.driver_id)return;
+  var dates=getWorkDates(30);
+  var date=dates[0];
+  // Check 45-day rule
+  var warn=await check45Day(cs.address,date);
+  if(warn){
+    if(!confirm(warn+'\n\nSchedule anyway?'))return;
+  }
+  var cnt=S.stops.filter(function(s){return s.driver_id===cs.driver_id&&s.scheduled_date===date;}).length;
+  var r=await dbInsert('route_stops',{driver_id:cs.driver_id,address:cs.address,property_type:'unknown',scheduled_date:date,day_of_week:dayName(date),stop_order:cnt+1,status:'pending',service_type_id:cs.service_type_id||null});
+  if(r&&r[0]){S.stops.push(r[0]);await loadMonthStops();renderCalendar();renderStatusBar();toast('Scheduled for '+date,'ok');}
+}
+async function scheduleAllDue(){
+  var future=new Date();future.setDate(future.getDate()+14);
+  var cutoff=future.toISOString().split('T')[0];
+  var due=S.clientScheds.filter(function(cs){return cs.next_due_date&&cs.next_due_date<=cutoff&&cs.driver_id;});
+  var dates=getWorkDates(60);var saved=0;
+  for(var i=0;i<due.length;i++){
+    var cs=due[i];
+    var date=dates.find(function(d){return S.stops.filter(function(s){return s.driver_id===cs.driver_id&&s.scheduled_date===d;}).length<15;});
+    if(!date)continue;
+    var r=await dbInsert('route_stops',{driver_id:cs.driver_id,address:cs.address,property_type:'unknown',scheduled_date:date,day_of_week:dayName(date),stop_order:99,status:'pending',service_type_id:cs.service_type_id||null});
+    if(r&&r[0]){S.stops.push(r[0]);saved++;}
+  }
+  await loadMonthStops();renderCalendar();renderStatusBar();renderDueSoon();toast(saved+' clients scheduled','ok');
+}
+
+// ═══════════════════════════════════════
+// MAPS
+// ═══════════════════════════════════════
+function loadGMaps(){
+  if(window.google&&window.google.maps){S.gmReady=true;return;}
+  var s=document.createElement('script');
+  s.src='https://maps.googleapis.com/maps/api/js?key='+GKEY+'&libraries=geometry&callback=gmLoaded';
+  s.async=true;document.head.appendChild(s);
+}
+window.gmLoaded=function(){S.gmReady=true;};
+function viewMapDate(ds){document.getElementById('mapDate').value=ds;showPage('maps',null);setTimeout(renderMaps,200);}
+function renderMaps(){
+  if(!S.gmReady){setTimeout(renderMaps,400);return;}
+  document.getElementById('dirPanel').style.display='none';
+  var ds=document.getElementById('mapDate').value||new Date().toISOString().split('T')[0];
+  // Always reload from DB for this date
+  dbGet('route_stops','&scheduled_date=eq.'+ds+'&order=stop_order.asc').then(function(rows){
+    S.stops=S.stops.filter(function(s){return s.scheduled_date!==ds;});
+    S.stops=S.stops.concat(rows||[]);
+    var stops=S.stops.filter(function(s){return s.scheduled_date===ds;});
+    var gStops=stops.filter(function(s){return s.lat&&s.lng;});
+    var tabs=document.getElementById('mapTabs');
+    var content=document.getElementById('mapContent');
+    var stats=document.getElementById('rStats');
+    var legend=document.getElementById('mapLegend');
+    if(!stops.length){content.innerHTML='<div class="empty"><div class="icon">🗺</div><p>No stops for this date</p></div>';tabs.innerHTML='';stats.innerHTML='';legend.style.display='none';return;}
+    var drvIds=[...new Set(stops.map(function(s){return s.driver_id;}))];
+    var drvs=drvIds.map(function(id){return S.drvs.find(function(d){return d.id===id;});}).filter(Boolean);
+    var label=new Date(ds+'T12:00:00').toLocaleDateString('en-CA',{weekday:'long',month:'long',day:'numeric'});
+    stats.innerHTML='<div class="rsc"><div class="rsn">'+stops.length+'</div><div class="rsl">Total - '+label+'</div></div>'+drvs.map(function(d){return'<div class="rsc" id="rsc-'+d.id+'"><div class="rsn" style="color:'+d.color+'">'+stops.filter(function(s){return s.driver_id===d.id;}).length+'</div><div class="rsl">'+d.name+'</div></div>';}).join('');
+    legend.style.display='flex';
+    legend.innerHTML=drvs.map(function(d){return'<div style="display:flex;align-items:center;gap:5px;font-size:11px;font-weight:500"><div style="width:10px;height:10px;border-radius:50%;background:'+d.color+'"></div>'+d.name+'</div>';}).join('')+'<div style="display:flex;align-items:center;gap:5px;font-size:11px"><div style="width:10px;height:10px;border-radius:50%;background:#1A2B1A"></div>Depot</div>';
+    tabs.innerHTML='<button class="mtab on" data-action="all" data-ds="'+ds+'">🗺 All</button>'+drvs.map(function(d){var t=stops.filter(function(s){return s.driver_id===d.id;}).length;var g=gStops.filter(function(s){return s.driver_id===d.id;}).length;return'<button class="mtab" style="border-color:'+d.color+';color:'+d.color+'" data-action="drv" data-drvid="'+d.id+'" data-ds="'+ds+'">'+d.name+' ('+t+')'+(g<t?' ⚠️':'')+'</button>';}).join('');
+    tabs.onclick=function(e){
+      var btn=e.target.closest('[data-action]');if(!btn)return;
+      document.querySelectorAll('.mtab').forEach(function(t){t.classList.remove('on');});
+      btn.classList.add('on');
+      if(btn.dataset.action==='all')showAllMap(btn,btn.dataset.ds);
+      else showDrvMap(btn.dataset.drvid,btn.dataset.ds,btn);
+    };
+    showAllMap(tabs.querySelector('.mtab'),ds);
+  });
+}
+function showAllMap(btn,ds){
+  document.querySelectorAll('.mtab').forEach(function(t){t.classList.remove('on');});if(btn)btn.classList.add('on');
+  var stops=S.stops.filter(function(s){return s.scheduled_date===ds&&s.lat&&s.lng;});
+  var missing=S.stops.filter(function(s){return s.scheduled_date===ds;}).length-stops.length;
+  var warn=missing>0?'<div class="banner"><span>⚠️</span><strong>'+missing+' addresses not geocoded.</strong> Click Optimise on the calendar first.</div>':'';
+  document.getElementById('mapContent').innerHTML=warn+'<div class="mwrap"><div id="theMap" style="height:500px"></div></div>';
+  if(!stops.length)return;
+  var map=buildMap('theMap',{lat:stops[0].lat,lng:stops[0].lng});
+  var drvIds=[...new Set(stops.map(function(s){return s.driver_id;}))];
+  drvIds.forEach(function(did){
+    var d=S.drvs.find(function(x){return x.id===did;});if(!d)return;
+    var ds2=stops.filter(function(s){return s.driver_id===did;}).sort(function(a,b){return(a.stop_order||0)-(b.stop_order||0);});
+    plotRoute(map,d,ds2,false);
+  });
+  var deptIds=[...new Set(drvIds.map(function(did){return(S.drvs.find(function(d){return d.id===did;})||{}).department_id;}).filter(Boolean))];
+  deptIds.forEach(function(did){var dept=S.depts.find(function(x){return x.id===did;});if(dept&&dept.depot_address)addDepot(map,dept.depot_address,dept.name);});
+}
+function showDrvMap(drvId,ds,btn){
+  document.querySelectorAll('.mtab').forEach(function(t){t.classList.remove('on');});if(btn)btn.classList.add('on');
+  var d=S.drvs.find(function(x){return x.id===drvId;});if(!d)return;
+  var stops=S.stops.filter(function(s){return s.driver_id===drvId&&s.scheduled_date===ds&&s.lat&&s.lng;});
+  var total=S.stops.filter(function(s){return s.driver_id===drvId&&s.scheduled_date===ds;}).length;
+  var dept=S.depts.find(function(x){return x.id===d.department_id;});
+  var warn=total-stops.length>0?'<div class="banner"><span>⚠️</span><strong>'+(total-stops.length)+' stops not geocoded</strong></div>':'';
+  document.getElementById('dirPanel').style.display='none';
+  document.getElementById('mapContent').innerHTML=warn+'<div style="display:flex;align-items:center;gap:8px;padding:9px 13px;background:#fff;border:1px solid #E2E5EA;border-radius:7px;margin-bottom:8px"><div style="width:11px;height:11px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong><span class="b bg">'+(dept?dept.name:'')+ '</span><span id="drvSum" style="margin-left:auto;color:#2D6A4F;font-weight:600;font-size:11px">Calculating...</span><button class="btn2 bsm" onclick="toggleDirPanel()">Directions</button></div><div class="mwrap"><div id="theMap" style="height:490px"></div></div>';
+  if(!stops.length)return;
+  var map=buildMap('theMap',{lat:stops[0].lat,lng:stops[0].lng});
+  plotRoute(map,d,stops.sort(function(a,b){return(a.stop_order||0)-(b.stop_order||0);}),true);
+  if(dept&&dept.depot_address)addDepot(map,dept.depot_address,'Depot');
+}
+function buildMap(elId,center){
+  var map=new google.maps.Map(document.getElementById(elId),{zoom:12,center:center,mapTypeId:S.mapType,styles:S.mapType==='roadmap'?mapStyle():[],mapTypeControl:true,fullscreenControl:true,streetViewControl:true,zoomControl:true});
+  S.curMap=map;if(S.trafficLayer)S.trafficLayer.setMap(map);return map;
+}
+function mapStyle(){return[{elementType:'geometry',stylers:[{color:'#f5f7f5'}]},{featureType:'road',elementType:'geometry',stylers:[{color:'#ffffff'}]},{featureType:'road.highway',elementType:'geometry',stylers:[{color:'#fde68a'}]},{featureType:'water',elementType:'geometry',stylers:[{color:'#bfdbfe'}]},{featureType:'poi',elementType:'labels',stylers:[{visibility:'off'}]}];}
+function toggleDirPanel(){var p=document.getElementById('dirPanel');if(p)p.style.display=p.style.display==='none'?'block':'none';}
+function toggleTraffic(){var btn=document.getElementById('trafficBtn');if(!S.curMap)return;if(!S.trafficLayer)S.trafficLayer=new google.maps.TrafficLayer();if(S.trafficLayer.getMap()){S.trafficLayer.setMap(null);btn.style.cssText='';}else{S.trafficLayer.setMap(S.curMap);btn.style.background='#2D6A4F';btn.style.color='#fff';}}
+function toggleSat(){var btn=document.getElementById('satBtn');if(!S.curMap)return;if(S.mapType==='roadmap'){S.mapType='satellite';S.curMap.setMapTypeId('satellite');S.curMap.setOptions({styles:[]});btn.style.background='#2D6A4F';btn.style.color='#fff';}else{S.mapType='roadmap';S.curMap.setMapTypeId('roadmap');S.curMap.setOptions({styles:mapStyle()});btn.style.cssText='';}}
+function addDepot(map,addr,label){geocodeRaw(addr).then(function(g){if(!g)return;var m=new google.maps.Marker({position:g,map:map,title:label+' Depot',label:{text:'D',color:'#fff',fontWeight:'bold',fontSize:'10px'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:14,fillColor:'#1A2B1A',fillOpacity:1,strokeColor:'#5DBE6E',strokeWeight:2.5},zIndex:500});new google.maps.InfoWindow({content:'<div style="font-size:12px;padding:6px"><strong>🏢 '+label+'</strong><br>'+addr+'</div>'}).open(map,m);map.setCenter(g);});}
+function plotRoute(map,d,stops,showDir){
+  if(!stops.length)return;
+  var bounds=new google.maps.LatLngBounds();
+  stops.forEach(function(s,i){
+    var pos={lat:s.lat,lng:s.lng};bounds.extend(pos);
+    var iw=new google.maps.InfoWindow({content:'<div style="font-family:Roboto,sans-serif;padding:8px;min-width:180px"><div style="font-weight:700;font-size:13px;margin-bottom:4px">Stop '+(i+1)+' - '+d.name+'</div><div style="font-size:12px">📍 '+s.address+'</div>'+(s.status==='completed'?'<div style="color:#16A34A;font-size:11px;margin-top:3px">Done Completed</div>':'')+'</div>'});
+    var m=new google.maps.Marker({position:pos,map:map,label:{text:String(i+1),color:'#fff',fontWeight:'bold',fontSize:'11px'},icon:{path:google.maps.SymbolPath.CIRCLE,scale:16,fillColor:s.status==='completed'?'#16A34A':d.color,fillOpacity:1,strokeColor:'#fff',strokeWeight:2.5},title:'Stop '+(i+1)+': '+s.address,zIndex:100+i});
+    m.addListener('click',function(){iw.open(map,m);});
+  });
+  map.fitBounds(bounds,{padding:50});
+  var dept=S.depts.find(function(x){return x.id===d.department_id;});
+  var depotAddr=dept?dept.depot_address:'';
+  function doDir(origin){
+    var svc=new google.maps.DirectionsService();
+    var ren=new google.maps.DirectionsRenderer({map:map,suppressMarkers:true,polylineOptions:{strokeColor:d.color,strokeOpacity:.9,strokeWeight:5}});
+    svc.route({
+      origin:origin||{lat:stops[0].lat,lng:stops[0].lng},
+      destination:origin||{lat:stops[stops.length-1].lat,lng:stops[stops.length-1].lng},
+      waypoints:stops.map(function(s){return{location:{lat:s.lat,lng:s.lng},stopover:true};}),
+      travelMode:google.maps.TravelMode.DRIVING,optimizeWaypoints:false,
+      drivingOptions:{departureTime:new Date(new Date().setHours(7,0,0,0)),trafficModel:google.maps.TrafficModel.BEST_GUESS}
+    },function(result,status){
+      if(status==='OK'){
+        ren.setDirections(result);
+        var legs=result.routes[0].legs;
+        var mi=(legs.reduce(function(s,l){return s+l.distance.value;},0)/1609).toFixed(1);
+        var mins=Math.round(legs.reduce(function(s,l){return s+(l.duration_in_traffic||l.duration).value;},0)/60);
+        var rsc=document.getElementById('rsc-'+d.id);if(rsc){rsc.querySelector('.rsn').textContent=mi+' mi';rsc.querySelector('.rsl').textContent=d.name+' · '+mins+' min';}
+        var sum=document.getElementById('drvSum');if(sum)sum.textContent=mi+' mi · '+mins+' min';
+        if(showDir){
+          var steps=legs.reduce(function(a,l){return a.concat(l.steps);},[] );
+          var dc=document.getElementById('dirContent');if(dc)dc.innerHTML=steps.map(function(st){return'<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #F3F4F6;font-size:11px"><span>➤</span><span>'+st.instructions.replace(/<[^>]+>/g,'')+'</span><span style="margin-left:auto;white-space:nowrap;color:#6b7280;font-size:10px">'+st.distance.text+'</span></div>';}).join('');
+        }
+      } else {new google.maps.Polyline({path:stops.map(function(s){return{lat:s.lat,lng:s.lng};}),geodesic:true,strokeColor:d.color,strokeOpacity:.85,strokeWeight:4,map:map});}
+    });
+  }
+  if(depotAddr)geocodeRaw(depotAddr).then(function(g){doDir(g);});else doDir(null);
+}
+
+// ═══════════════════════════════════════
+// DOWNLOAD / EXPORT
+// ═══════════════════════════════════════
+function dlRoute(drvId,ds){
+  var d=S.drvs.find(function(x){return x.id===drvId;});
+  var stops=S.stops.filter(function(s){return s.driver_id===drvId&&s.scheduled_date===ds;}).sort(function(a,b){return(a.stop_order||0)-(b.stop_order||0);});
+  if(!stops.length){toast('No stops','err');return;}
+  var rows=[['Stop','Address','Service','Property','Status']].concat(stops.map(function(s,i){var svc=S.svcs.find(function(x){return x.id===s.service_type_id;});return[i+1,s.address,svc?svc.name:'',s.property_type,s.status];}));
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),d.name+' '+ds);
+  XLSX.writeFile(wb,'Route_'+d.name+'_'+ds+'.xlsx');toast('Downloaded','ok');
+}
+function cpRoute(drvId,ds){
+  var d=S.drvs.find(function(x){return x.id===drvId;});
+  var stops=S.stops.filter(function(s){return s.driver_id===drvId&&s.scheduled_date===ds;}).sort(function(a,b){return(a.stop_order||0)-(b.stop_order||0);});
+  var dept=S.depts.find(function(x){return x.id===d.department_id;});
+  var txt='ROUTE: '+d.name+' | '+ds+'\nDepot: '+(dept?dept.depot_address||'N/A':'N/A')+'\n'+'─'.repeat(36)+'\n';
+  stops.forEach(function(s,i){txt+=(i+1)+'. '+s.address+'\n';});
+  txt+='─'.repeat(36)+'\nReturn to Depot';
+  navigator.clipboard.writeText(txt).then(function(){toast('Copied');}).catch(function(){toast('Copy failed','err');});
+}
+function exportExcel(){
+  if(!S.stops.length){toast('No stops to export','err');return;}
+  var wb=XLSX.utils.book_new();
+  var dates=[...new Set(S.stops.map(function(s){return s.scheduled_date;}))].sort();
+  S.drvs.forEach(function(d){
+    dates.forEach(function(dt){
+      var stops=S.stops.filter(function(s){return s.driver_id===d.id&&s.scheduled_date===dt;}).sort(function(a,b){return(a.stop_order||0)-(b.stop_order||0);});
+      if(!stops.length)return;
+      var rows=[['Stop','Address','Service','Property','Status']].concat(stops.map(function(s,i){var svc=S.svcs.find(function(x){return x.id===s.service_type_id;});return[i+1,s.address,svc?svc.name:'',s.property_type,s.status];}));
+      XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),(d.name.slice(0,6)+' '+dt.slice(5)).substring(0,31));
+    });
+  });
+  XLSX.writeFile(wb,'FieldRoute_'+new Date().toISOString().split('T')[0]+'.xlsx');toast('Exported','ok');
+}
+
+// ═══════════════════════════════════════
+// CLIENTS / HISTORY
+// ═══════════════════════════════════════
+function renderClientTbl(){
+  var tb=document.getElementById('clientTbl');
+  var today=new Date().toISOString().split('T')[0];
+  if(!S.clients.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:20px">No clients yet</td></tr>';return;}
+  tb.innerHTML=S.clients.map(function(c){
+    var cs=S.clientScheds.find(function(x){return x.client_id===c.id;});
+    var nd=cs?cs.next_due_date:c.next_service_date||'-';
+    var over=nd!=='-'&&nd<today;
+    return'<tr><td>'+c.address+'</td><td><span class="b '+(c.property_type==='commercial'?'bc':'br')+'">'+(c.property_type==='commercial'?'COM':'RES')+'</span></td><td>'+(cs?cs.last_service_date||'-':'-')+'</td><td>'+nd+'</td><td>'+(over?'<span class="b bm">Overdue</span>':'<span class="b bd">OK</span>')+'</td></tr>';
+  }).join('');
+}
+async function loadHist(){
+  var did=document.getElementById('histDrv').value;
+  var dt=document.getElementById('histDate').value;
+  var q='&order=service_date.desc&limit=100';
+  if(did)q+='&driver_id=eq.'+did;if(dt)q+='&service_date=eq.'+dt;
+  var h=await dbGet('service_history',q);
+  var tb=document.getElementById('histTbl');
+  if(!h.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;color:#9CA3AF;padding:20px">No records</td></tr>';return;}
+  tb.innerHTML=h.map(function(x){var d=S.drvs.find(function(v){return v.id===x.driver_id;});var svc=S.svcs.find(function(v){return v.id===x.service_type_id;});return'<tr><td>'+x.service_date+'</td><td>'+(d?d.name:'-')+'</td><td style="font-size:11px">'+(x.notes||'-')+'</td><td>'+(svc?svc.name:'-')+'</td><td><span class="b bd">Done</span></td></tr>';}).join('');
+}
+
+// ═══════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════
+function showPage(name,el){
+  document.querySelectorAll('.page').forEach(function(p){p.classList.remove('on');});
+  document.querySelectorAll('.ni').forEach(function(i){i.classList.remove('on');});
+  document.getElementById('page-'+name).classList.add('on');
+  if(el)el.classList.add('on');
+  var titles={cal:'Monthly Schedule',maps:'Route Maps',duesoon:'Due Soon',depts:'Departments',drvs:'Drivers',clients:'Clients & History'};
+  document.getElementById('pageTitle').textContent=titles[name]||name;
+  if(name==='cal')renderCalendar();
+  if(name==='maps'){document.getElementById('mapDate').value=S.selDate||new Date().toISOString().split('T')[0];renderMaps();}
+  if(name==='drvs')renderDrvTable();
+  if(name==='depts')renderDeptCards();
+  if(name==='clients'){renderClientTbl();populateSelects();}
+  if(name==='duesoon')renderDueSoon();
+}
+function showInner(id,el){
+  document.querySelectorAll('.itab').forEach(function(t){t.classList.remove('on');});if(el)el.classList.add('on');
+  document.getElementById('clientTab').style.display=id==='clientTab'?'block':'none';
+  document.getElementById('histTab').style.display=id==='histTab'?'block':'none';
+  if(id==='histTab'){populateSelects();loadHist();}
+}
+
+// ═══════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════
+function populateSelects(){
+  var deptOpts=S.depts.map(function(d){return'<option value="'+d.id+'">'+d.name+'</option>';}).join('');
+  ['impDept','depotDeptSel'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML='<option value="">Select...</option>'+deptOpts;});
+  var drvOpts=S.drvs.map(function(d){return'<option value="'+d.id+'">'+d.name+'</option>';}).join('');
+  ['reDrv','histDrv'].forEach(function(id){var el=document.getElementById(id);if(el)el.innerHTML=(id==='histDrv'?'<option value="">All Drivers</option>':'')+drvOpts;});
+}
+function populateDeptSel(elId,sel){document.getElementById(elId).innerHTML='<option value="">No Department</option>'+S.depts.map(function(d){return'<option value="'+d.id+'"'+(d.id===sel?' selected':'')+'>'+d.name+'</option>';}).join('');}
+function buildCpick(elId,stateKey){
+  var cols=stateKey==='selColor'?COLORS:DCOLS;
+  var html=cols.map(function(c){return'<div class="csw'+(c===S[stateKey]?' on':'')+'" style="background:'+c+'" data-color="'+c+'" data-key="'+stateKey+'"></div>';}).join('');
+  var el=document.getElementById(elId);
+  if(!el)return;
+  el.innerHTML=html;
+  el.onclick=function(e){
+    var sw=e.target.closest('[data-color]');
+    if(!sw)return;
+    S[sw.dataset.key]=sw.dataset.color;
+    buildCpick(elId,stateKey);
+  };
+}
+function openModal(id){document.getElementById(id).classList.add('on');}
+function closeModal(id){document.getElementById(id).classList.remove('on');}
+document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('.mo').forEach(function(m){m.addEventListener('click',function(e){if(e.target===m)m.classList.remove('on');});});});
+var _toastTimer=null;
+function toast(msg,type){
+  clearTimeout(_toastTimer);
+  var el=document.getElementById('toast');
+  el.textContent=msg;el.className='toast on'+(type?' '+type:'');
+  _toastTimer=setTimeout(function(){el.classList.remove('on');},4000);
+}
+</script>
+</body>
+</html>
