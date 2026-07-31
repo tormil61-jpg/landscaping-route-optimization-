@@ -331,6 +331,17 @@ textarea{resize:vertical;min-height:60px}
             <input type="text" id="qrStart" placeholder="e.g. 11417 NW 59th Ter, Gainesville, FL — leave blank to start from first address">
           </div>
           <div class="fg">
+            <label class="fl">Capacity Limit (optional)</label>
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <select id="qrLimitMode" onchange="toggleQRLimitMode()" style="width:auto">
+                <option value="stops">By Stops</option>
+                <option value="sqft">By Sq Ft</option>
+              </select>
+              <input type="number" id="qrLimitVal" placeholder="e.g. 15" style="width:80px" value="15">
+              <span id="qrLimitUnit" style="font-size:11px;color:#6b7280">stops max</span>
+            </div>
+          </div>
+          <div class="fg">
             <label class="fl">Addresses — one per line (max 15)</label>
             <textarea id="qrAddresses" style="height:320px;font-size:12px;line-height:1.7;resize:vertical" placeholder="704 Baerwald Rd, Gainesville, FL 32606&#10;8982 SW 73rd Ln, Gainesville, FL 32608&#10;7983 SW 80th Ln, Gainesville, FL 32608&#10;...paste your addresses here"></textarea>
           </div>
@@ -464,15 +475,22 @@ textarea{resize:vertical;min-height:60px}
       <input type="date" id="impStartDate">
       <div style="font-size:10px;color:#6b7280;margin-top:3px">Stops scheduled Mon-Thu starting from this date. Drivers alternate days so routes stay geographically tight.</div>
     </div>
-    <div class="fg"><label class="fl">Stops Per Driver Per Day</label>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn2 bsm" onclick="setStopLimit(10)">10 stops</button>
-        <button class="btn2 bsm" onclick="setStopLimit(12)">12 stops</button>
-        <button class="btn2 bsm" onclick="setStopLimit(15)">15 stops</button>
-        <button class="btn2 bsm" onclick="setStopLimit(20)">20 stops</button>
-        <span style="font-size:11px;color:#6b7280">or set manually below</span>
+      <div class="fg"><label class="fl">Scheduling Mode</label>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <button class="btn2 bsm" id="modeStops" onclick="setSchedMode('stops')" style="background:#2D6A4F;color:#fff;border-color:#2D6A4F">📍 By Stops</button>
+          <button class="btn2 bsm" id="modeSqft" onclick="setSchedMode('sqft')">📐 By Sq Ft</button>
+        </div>
+        <div id="modeStopsDesc" style="font-size:10px;color:#6b7280">Limit drivers by number of stops per day. Best for standard routes.</div>
+        <div id="modeSqftDesc" style="font-size:10px;color:#6b7280;display:none">Limit drivers by total square footage per day. Best when properties vary in size.</div>
       </div>
-    </div>
+      <div class="fg"><label class="fl">Stops Per Driver Per Day</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+          <button class="btn2 bsm" onclick="setStopLimit(10)">10 stops</button>
+          <button class="btn2 bsm" onclick="setStopLimit(12)">12 stops</button>
+          <button class="btn2 bsm" onclick="setStopLimit(15)">15 stops</button>
+          <button class="btn2 bsm" onclick="setStopLimit(20)">20 stops</button>
+        </div>
+      </div>
     <div class="uzone" id="uzone" onclick="document.getElementById('ufile').click()" ondrop="onDrop(event)" ondragover="onDragOver(event)" ondragleave="this.classList.remove('over')">
       <input type="file" id="ufile" accept=".xlsx,.xls,.csv" onchange="onFile(event)">
       <div style="font-size:24px;margin-bottom:6px">📊</div>
@@ -490,7 +508,8 @@ textarea{resize:vertical;min-height:60px}
         <div class="fg" style="margin:0"><label class="fl">State (F)</label><select id="cState"><option value="">None</option></select></div>
       </div>
       <div class="fg" style="margin-bottom:10px"><label class="fl">Service Type (B)</label><select id="cSvc"><option value="">None</option></select></div>
-      <div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Stop Limit Per Driver Per Day</div>
+      <div class="fg" id="cSqftRow" style="margin-bottom:10px;display:none"><label class="fl">Square Footage Column</label><select id="cSqft"><option value="">None</option></select></div>
+      <div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px">Capacity Per Driver Per Day</div>
       <div id="limEditor"></div>
       <div id="impSchedulePreview" style="display:none;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:10px 12px;margin-top:10px;font-size:12px"></div>
       <div class="mfoot"><button class="btn2" onclick="closeModal('importMo')">Cancel</button><button class="btn" onclick="doImport()">Assign to Drivers</button></div>
@@ -1412,6 +1431,34 @@ function openImport(){
   if(S.activeDept){document.getElementById('impDept').value=S.activeDept;onImpDeptChange();}
   openModal('importMo');
 }
+// Scheduling mode: 'stops' or 'sqft'
+S.schedMode='stops';
+S.sqftMap={}; // sqft capacity per driver per day
+
+function setSchedMode(mode){
+  S.schedMode=mode;
+  var isStops=mode==='stops';
+  document.getElementById('modeStops').style.cssText=isStops?'background:#2D6A4F;color:#fff;border-color:#2D6A4F':'';
+  document.getElementById('modeSqft').style.cssText=!isStops?'background:#2D6A4F;color:#fff;border-color:#2D6A4F':'';
+  document.getElementById('modeStopsDesc').style.display=isStops?'block':'none';
+  document.getElementById('modeSqftDesc').style.display=!isStops?'block':'none';
+  // Show/hide sqft column selector
+  var sqftRow=document.getElementById('cSqftRow');
+  if(sqftRow)sqftRow.style.display=!isStops&&document.getElementById('impPreview').style.display!=='none'?'block':'none';
+  // Update limit editor labels
+  updateLimEditorLabels();
+  updateSchedulePreview();
+}
+
+function updateLimEditorLabels(){
+  var rows=document.querySelectorAll('[id^="lim-"]');
+  rows.forEach(function(el){
+    var label=el.previousElementSibling;
+    if(label)label.textContent=S.schedMode==='sqft'?'Max sq ft/day:':'Max/day:';
+    if(S.schedMode==='sqft'){el.min=1000;el.max=200000;el.step=1000;if(parseInt(el.value)<100)el.value=50000;}
+    else{el.min=1;el.max=50;el.step=1;if(parseInt(el.value)>100)el.value=15;}
+  });
+}
 function setImpStartDate(mode){
   var d=new Date();
   if(mode==='next-monday'){
@@ -1433,6 +1480,12 @@ function setImpStartDate(mode){
   updateSchedulePreview();
 }
 
+function setSqftLimit(drvId,n){
+  var el=document.getElementById('lim-'+drvId);
+  if(el){el.value=n;S.sqftMap[drvId]=n;}
+  updateSchedulePreview();
+}
+
 function setStopLimit(n){
   var drvs=document.querySelectorAll('[id^="lim-"]');
   drvs.forEach(function(el){el.value=n;var id=el.id.slice(4);S.limMap[id]=n;});
@@ -1449,16 +1502,29 @@ function updateSchedulePreview(){
   var selDrvs=(did?S.drvs.filter(function(d){return d.department_id===did;}):S.drvs)
     .filter(function(d){var chk=document.getElementById('dc-'+d.id);return chk&&chk.checked;});
   if(!selDrvs.length){el.style.display='none';return;}
-  var lim=Math.min.apply(null,selDrvs.map(function(d){return S.limMap[d.id]||d.daily_stop_limit||15;}));
-  var stopsPerDay=lim*selDrvs.length;
-  var days=Math.ceil(total/stopsPerDay);
-  var weeks=Math.ceil(days/4);
   var startDate=document.getElementById('impStartDate').value;
   el.style.display='block';
-  el.innerHTML='<strong>'+total+' addresses</strong> across <strong>'+selDrvs.length+' driver'+(selDrvs.length>1?'s':'')+'</strong> · '
-    +'<strong>'+lim+' stops/driver/day</strong> · Fills <strong>'+days+' days</strong> (~'+weeks+' week'+(weeks>1?'s':'')+')'
-    +(startDate?' starting <strong>'+startDate+'</strong>':'')
-    +(total>23*selDrvs.length?'<br><span style="color:#D97706">⚠ Some days exceed 23 stops — Google will optimise the first 23 and nearest-neighbour the rest.</span>':'');
+  if(S.schedMode==='sqft'){
+    var sqftCol=document.getElementById('cSqft')?document.getElementById('cSqft').value:'';
+    var totalSqft=sqftCol!==''?rows.reduce(function(s,r){return s+(parseFloat(r[parseInt(sqftCol)])||0);},0):0;
+    var minCap=Math.min.apply(null,selDrvs.map(function(d){return S.sqftMap[d.id]||50000;}));
+    var sqftPerDay=minCap*selDrvs.length;
+    var days=totalSqft>0?Math.ceil(totalSqft/sqftPerDay):Math.ceil(total/selDrvs.length);
+    var weeks=Math.ceil(days/4);
+    el.innerHTML='<strong>'+total+' properties</strong>'+(totalSqft>0?' · <strong>'+Math.round(totalSqft/1000)+'k sq ft total</strong>':'')+' across <strong>'+selDrvs.length+' driver'+(selDrvs.length>1?'s':'')+' </strong>'
+      +' · <strong>'+(minCap/1000)+'k sq ft/driver/day</strong> · Fills <strong>'+days+' days</strong> (~'+weeks+' week'+(weeks>1?'s':'')+')'
+      +(startDate?' starting <strong>'+startDate+'</strong>':'')
+      +(totalSqft===0?'<br><span style="color:#D97706">⚠ Select the square footage column above for accurate scheduling</span>':'');
+  } else {
+    var lim=Math.min.apply(null,selDrvs.map(function(d){return S.limMap[d.id]||d.daily_stop_limit||15;}));
+    var stopsPerDay=lim*selDrvs.length;
+    var days=Math.ceil(total/stopsPerDay);
+    var weeks=Math.ceil(days/4);
+    el.innerHTML='<strong>'+total+' addresses</strong> across <strong>'+selDrvs.length+' driver'+(selDrvs.length>1?'s':'')+' </strong>'
+      +' · <strong>'+lim+' stops/driver/day</strong> · Fills <strong>'+days+' days</strong> (~'+weeks+' week'+(weeks>1?'s':'')+')'
+      +(startDate?' starting <strong>'+startDate+'</strong>':'')
+      +(total>23*selDrvs.length?'<br><span style="color:#D97706">⚠ Some days exceed 23 stops — Google will optimise first 23 per driver.</span>':'');
+  }
 }
 function onImpDeptChange(){
   var did=document.getElementById('impDept').value;
@@ -1509,12 +1575,28 @@ function processFile(file){
     var did=document.getElementById('impDept').value;
     var drvs=did?S.drvs.filter(function(d){return d.department_id===did;}):S.drvs;
     document.getElementById('limEditor').innerHTML=drvs.map(function(d){
-      return'<div class="slrow"><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div><div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:#6b7280">Max/day:</span><input type="number" id="lim-'+d.id+'" value="'+(S.limMap[d.id]||d.daily_stop_limit)+'" min="1" max="50" style="width:55px;padding:3px 6px;font-size:11px" oninput="S.limMap[this.id.slice(4)]=parseInt(this.value)||15;updateSchedulePreview()"></div></div>';
+      var isSqft=S.schedMode==='sqft';
+      var defVal=isSqft?(S.sqftMap[d.id]||50000):(S.limMap[d.id]||d.daily_stop_limit);
+      var minV=isSqft?1000:1;var maxV=isSqft?200000:50;var stepV=isSqft?5000:1;
+      return'<div class="slrow"><div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:'+d.color+'"></div><strong>'+d.name+'</strong></div>'
+        +(isSqft?'<div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn2 bsm" onclick="setSqftLimit(\''+d.id+'\',30000)">30k</button><button class="btn2 bsm" onclick="setSqftLimit(\''+d.id+'\',50000)">50k</button><button class="btn2 bsm" onclick="setSqftLimit(\''+d.id+'\',75000)">75k</button></div>':'')
+        +'<div style="display:flex;align-items:center;gap:5px"><span style="font-size:10px;color:#6b7280">'+(isSqft?'Max sq ft/day:':'Max/day:')+' </span>'
+        +'<input type="number" id="lim-'+d.id+'" value="'+defVal+'" min="'+minV+'" max="'+maxV+'" step="'+stepV+'" style="width:'+(isSqft?'75px':'55px')+';padding:3px 6px;font-size:11px" oninput="'+(isSqft?'S.sqftMap':'S.limMap')+'[this.id.slice(4)]=parseInt(this.value)||'+(isSqft?50000:15)+';updateSchedulePreview()">'
+        +(isSqft?'<span style="font-size:10px;color:#6b7280">sq ft</span>':'')
+        +'</div></div>';
     }).join('');
     // Preview
     var prev=data.slice(0,5);
     document.getElementById('prevTbl').innerHTML='<table class="dt">'+prev.map(function(row,ri){return'<tr style="background:'+(ri===0?'#F9FAFB':'#fff')+'">'+row.map(function(c,ci){return'<td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">'+(ri===0?'<strong>'+String.fromCharCode(65+ci)+': '+(c||'')+'</strong>':(c||''))+'</td>';}).join('')+'</tr>';}).join('')+'</table>';
     document.getElementById('impPreview').style.display='block';
+    // Show sqft column selector if in sqft mode
+    var sqftRow=document.getElementById('cSqftRow');
+    if(sqftRow)sqftRow.style.display=S.schedMode==='sqft'?'block':'none';
+    // Populate sqft column selector
+    var sqftEl=document.getElementById('cSqft');
+    if(sqftEl)sqftEl.innerHTML='<option value="">None</option>'+hdrs.map(function(h,i){return'<option value="'+i+'">'+String.fromCharCode(65+i)+': '+h+'</option>';}).join('');
+    // Auto-detect sqft column
+    var dsq=fc(['sqft','sq ft','square','area','footage']);if(dsq&&sqftEl)sqftEl.value=dsq;
     updateSchedulePreview();
   };
   r.readAsArrayBuffer(file);
@@ -1541,6 +1623,7 @@ async function doImport(){
   var zc=document.getElementById('cZip').value;
   var sc=document.getElementById('cState').value;
   var svc=document.getElementById('cSvc').value;
+  var sqftc=document.getElementById('cSqft')?document.getElementById('cSqft').value:'';
 
   var items=S.upData.slice(1).map(function(row){
     var street=String(row[ac]||'').trim();if(!street||street.length<3)return null;
@@ -1551,7 +1634,7 @@ async function doImport(){
     if(city)parts.push(city);
     if(state&&zip)parts.push(state+' '+zip);else if(state)parts.push(state);else if(zip)parts.push(zip);
     if(!/,\s*[A-Za-z]{2,}/.test(parts.join(', ')))parts.push(getCityState(deptId));
-    return{address:parts.join(', '),svcType:svc!==''?String(row[parseInt(svc)]||'').trim():'',lat:null,lng:null};
+    return{address:parts.join(', '),svcType:svc!==''?String(row[parseInt(svc)]||'').trim():'',sqft:sqftc!==''?parseFloat(row[parseInt(sqftc)])||0:0,lat:null,lng:null};
   }).filter(Boolean);
 
   if(!items.length){toast('No valid addresses found','err');return;}
@@ -1573,10 +1656,15 @@ async function doImport(){
   var depotGeo=await geocodeRaw(dept.depot_address);
   var geoItems=items.filter(function(i){return i.lat&&i.lng;});
 
-  // Get stop limits per driver
+  // Get capacity per driver based on mode
   var lims={};
-  selDrvs.forEach(function(d){lims[d.id]=S.limMap[d.id]||d.daily_stop_limit||15;});
-  var minLim=Math.min.apply(null,selDrvs.map(function(d){return lims[d.id];}));
+  if(S.schedMode==='sqft'){
+    selDrvs.forEach(function(d){lims[d.id]=S.sqftMap[d.id]||50000;});
+    var minLim=Math.min.apply(null,selDrvs.map(function(d){return lims[d.id];}));
+  } else {
+    selDrvs.forEach(function(d){lims[d.id]=S.limMap[d.id]||d.daily_stop_limit||15;});
+    var minLim=Math.min.apply(null,selDrvs.map(function(d){return lims[d.id];}));
+  }
 
   // Filter by service type if drivers have specific codes
   // (e.g. LHT drivers get LHT stops, ORN drivers get ORN stops)
@@ -1591,8 +1679,15 @@ async function doImport(){
     if(withCode.length)svcFiltered=withCode;
   }
 
-  // Cluster all stops into groups of minLim — each cluster = one driver-day
-  var allClusters=geoCluster(svcFiltered,minLim,depotGeo);
+  // Cluster all stops into groups
+  // In sqft mode: cluster by total sqft per group not count
+  // In stops mode: cluster by count (minLim)
+  var allClusters;
+  if(S.schedMode==='sqft'){
+    allClusters=geoClusterSqft(svcFiltered,minLim,depotGeo);
+  } else {
+    allClusters=geoCluster(svcFiltered,minLim,depotGeo);
+  }
 
   // Assign clusters to drivers alternately across work dates
   // This ensures each driver gets geographically tight clusters on different days
@@ -1648,6 +1743,7 @@ async function doImport(){
         status:'pending',
         service_type_id:svcObj?svcObj.id:null,
         notes:item.svcType||null,
+        sqft:item.sqft||null,
         owner_id:ownerId()
       });
       if(r&&r.length){S.stops.push(r[0]);saved++;}
@@ -1680,6 +1776,41 @@ function assignDriver(item,pool){
   if(isN){var mn=p.filter(function(d){return(d.zone||'').toLowerCase().includes('north');});if(mn.length)return mn[0];}
   if(isS){var ms=p.filter(function(d){return(d.zone||'').toLowerCase().includes('south');});if(ms.length)return ms[0];}
   return p[0]||null;
+}
+
+// Cluster by square footage capacity instead of stop count
+function geoClusterSqft(items,maxSqft,depotGeo){
+  if(!items.length)return[];
+  var origin=depotGeo||{lat:items[0].lat,lng:items[0].lng};
+  var pool=items.map(function(item,i){return Object.assign({},item,{_i:i});});
+  pool.sort(function(a,b){return hdist(origin,a)-hdist(origin,b);});
+  var used=new Set();var clusters=[];
+  for(var i=0;i<pool.length;i++){
+    if(used.has(pool[i]._i))continue;
+    used.add(pool[i]._i);
+    var cluster=[pool[i]];
+    var clusterSqft=pool[i].sqft||0;
+    while(true){
+      var last=cluster[cluster.length-1];var best=null;var bestD=Infinity;
+      for(var j=0;j<pool.length;j++){
+        if(used.has(pool[j]._i))continue;
+        var nextSqft=clusterSqft+(pool[j].sqft||0);
+        if(nextSqft>maxSqft)continue; // would exceed capacity
+        var d=hdist(last,pool[j]);if(d<bestD){bestD=d;best=pool[j];}
+      }
+      if(!best)break;
+      used.add(best._i);cluster.push(best);clusterSqft+=best.sqft||0;
+    }
+    // NN sort within cluster
+    var ordered=[];var cur=origin;var rem=cluster.slice();
+    while(rem.length){
+      var ni=0;var nd=Infinity;
+      for(var k=0;k<rem.length;k++){var dk=hdist(cur,rem[k]);if(dk<nd){nd=dk;ni=k;}}
+      ordered.push(rem[ni]);cur={lat:rem[ni].lat,lng:rem[ni].lng};rem.splice(ni,1);
+    }
+    clusters.push(ordered);
+  }
+  return clusters;
 }
 
 function geoCluster(items,maxSize,depotGeo){
@@ -1902,6 +2033,14 @@ async function scheduleAllDue(){
 // ═══════════════════════════════════════
 // QUICK ROUTE
 // ═══════════════════════════════════════
+function toggleQRLimitMode(){
+  var mode=document.getElementById('qrLimitMode').value;
+  var unit=document.getElementById('qrLimitUnit');
+  var val=document.getElementById('qrLimitVal');
+  if(mode==='sqft'){unit.textContent='sq ft max';val.value=50000;val.step=5000;}
+  else{unit.textContent='stops max';val.value=15;val.step=1;}
+}
+
 function clearQuickRoute(){
   document.getElementById('qrAddresses').value='';
   document.getElementById('qrStart').value='';
@@ -1919,6 +2058,13 @@ async function runQuickRoute(){
 
   if(!lines.length){toast('Paste at least one address','err');return;}
   if(lines.length>15){toast('Maximum 15 addresses. Remove '+(lines.length-15)+' addresses.','err');return;}
+
+  // Check limit mode
+  var limitMode=document.getElementById('qrLimitMode')?document.getElementById('qrLimitMode').value:'stops';
+  var limitVal=parseInt(document.getElementById('qrLimitVal')?document.getElementById('qrLimitVal').value:15)||15;
+  if(limitMode==='stops'&&lines.length>limitVal){
+    toast('You have '+lines.length+' stops but limit is '+limitVal+'. Remove '+(lines.length-limitVal)+' or increase the limit.','err');return;
+  }
 
   toast('Geocoding '+lines.length+' addresses...');
 
