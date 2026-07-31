@@ -254,6 +254,7 @@ textarea{resize:vertical;min-height:60px}
   <div class="nsec">Operations</div>
   <div class="ni on" onclick="showPage('cal',this)">📅 Monthly Schedule</div>
   <div class="ni" onclick="showPage('maps',this)">🗺 Route Maps</div>
+  <div class="ni" onclick="showPage('quickroute',this)">⚡ Quick Route</div>
   <div class="ni" onclick="showPage('duesoon',this)">⏰ Due Soon</div>
   <div class="nsec">Management</div>
   <div class="ni" onclick="showPage('depts',this)">🏢 Departments</div>
@@ -311,6 +312,37 @@ textarea{resize:vertical;min-height:60px}
       <div id="dirPanel" style="display:none;margin-top:10px">
         <div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:5px">Turn by Turn</div>
         <div id="dirContent" style="background:#fff;border:1px solid #E2E5EA;border-radius:8px;padding:10px;max-height:300px;overflow-y:auto"></div>
+      </div>
+    </div>
+
+    <!-- QUICK ROUTE -->
+    <div class="page" id="page-quickroute">
+      <div class="phdr">
+        <div><h1>⚡ Quick Route</h1><p>Paste up to 15 addresses and get an optimised route instantly</p></div>
+        <div style="display:flex;gap:6px">
+          <button class="btn2 bsm" onclick="clearQuickRoute()">🗑 Clear</button>
+          <button class="btn" onclick="runQuickRoute()">🗺 Get Route</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div class="fg">
+            <label class="fl">Start Point (optional)</label>
+            <input type="text" id="qrStart" placeholder="e.g. 11417 NW 59th Ter, Gainesville, FL — leave blank to start from first address">
+          </div>
+          <div class="fg">
+            <label class="fl">Addresses — one per line (max 15)</label>
+            <textarea id="qrAddresses" style="height:320px;font-size:12px;line-height:1.7;resize:vertical" placeholder="704 Baerwald Rd, Gainesville, FL 32606&#10;8982 SW 73rd Ln, Gainesville, FL 32608&#10;7983 SW 80th Ln, Gainesville, FL 32608&#10;...paste your addresses here"></textarea>
+          </div>
+          <div id="qrStats" style="display:none;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:10px"></div>
+          <div id="qrList" style="display:none"></div>
+        </div>
+        <div>
+          <div id="qrMapWrap" style="background:#F9FAFB;border:1px solid #E2E5EA;border-radius:8px;height:480px;display:flex;align-items:center;justify-content:center;color:#9CA3AF;font-size:13px">
+            Enter addresses and click Get Route
+          </div>
+          <div id="qrDirPanel" style="display:none;margin-top:10px;background:#fff;border:1px solid #E2E5EA;border-radius:8px;padding:10px;max-height:200px;overflow-y:auto"></div>
+        </div>
       </div>
     </div>
 
@@ -1868,8 +1900,175 @@ async function scheduleAllDue(){
 }
 
 // ═══════════════════════════════════════
-// MAPS
+// QUICK ROUTE
 // ═══════════════════════════════════════
+function clearQuickRoute(){
+  document.getElementById('qrAddresses').value='';
+  document.getElementById('qrStart').value='';
+  document.getElementById('qrStats').style.display='none';
+  document.getElementById('qrList').style.display='none';
+  document.getElementById('qrDirPanel').style.display='none';
+  document.getElementById('qrMapWrap').innerHTML='Enter addresses and click Get Route';
+  document.getElementById('qrMapWrap').style.cssText='background:#F9FAFB;border:1px solid #E2E5EA;border-radius:8px;height:480px;display:flex;align-items:center;justify-content:center;color:#9CA3AF;font-size:13px';
+}
+
+async function runQuickRoute(){
+  var raw=document.getElementById('qrAddresses').value;
+  var startAddr=document.getElementById('qrStart').value.trim();
+  var lines=raw.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>3;});
+
+  if(!lines.length){toast('Paste at least one address','err');return;}
+  if(lines.length>15){toast('Maximum 15 addresses. Remove '+(lines.length-15)+' addresses.','err');return;}
+
+  toast('Geocoding '+lines.length+' addresses...');
+
+  // Geocode all addresses
+  var stops=[];
+  for(var i=0;i<lines.length;i++){
+    var g=await geocodeAddr(lines[i],null);
+    stops.push({address:lines[i],lat:g?g.lat:null,lng:g?g.lng:null,idx:i});
+    await sleep(100);
+  }
+
+  var geocoded=stops.filter(function(s){return s.lat&&s.lng;});
+  var failed=stops.filter(function(s){return!s.lat||!s.lng;});
+
+  if(!geocoded.length){toast('Could not geocode any addresses. Check format.','err');return;}
+  if(failed.length)toast(failed.length+' addresses could not be geocoded and were skipped');
+
+  // Geocode start point if provided
+  var startGeo=null;
+  if(startAddr){
+    startGeo=await geocodeAddr(startAddr,null);
+    if(!startGeo)toast('Start address not found — using first stop as start');
+  }
+
+  toast('Optimising route...');
+
+  // Optimise route
+  var ordered=await optimiseRoute(geocoded,startAddr&&startGeo?startAddr:null);
+
+  // Show stats
+  var statsEl=document.getElementById('qrStats');
+  statsEl.style.display='block';
+  statsEl.innerHTML='<strong>'+ordered.length+' stops</strong> optimised'+(failed.length?' · <span style="color:#D97706">'+failed.length+' skipped</span>':'')+' · Click <strong>Copy Route</strong> to share with your driver';
+
+  // Show ordered list
+  var listEl=document.getElementById('qrList');
+  listEl.style.display='block';
+  listEl.innerHTML='<div style="font-size:10px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Optimised Order</div>'
+    +(startAddr?'<div style="display:flex;gap:8px;align-items:center;padding:7px 9px;background:#1A2B1A;color:#fff;border-radius:5px;margin-bottom:4px;font-size:11px"><span style="background:#5DBE6E;color:#1A2B1A;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0">S</span>'+startAddr+'</div>':'')
+    +ordered.map(function(s,i){
+      return'<div style="display:flex;gap:8px;align-items:center;padding:7px 9px;background:#fff;border:1px solid #E2E5EA;border-radius:5px;margin-bottom:3px;font-size:11px">'
+        +'<span style="background:#2D6A4F;color:#fff;width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;flex-shrink:0">'+(i+1)+'</span>'
+        +s.address+'</div>';
+    }).join('')
+    +'<div style="display:flex;gap:6px;margin-top:10px">'
+    +'<button class="btn" onclick="copyQuickRoute()" style="flex:1">📋 Copy Route</button>'
+    +'<button class="btn2" onclick="printQuickRoute()">🖨 Print</button>'
+    +'</div>';
+
+  // Show map
+  if(!S.gmReady){toast('Google Maps loading...','err');return;}
+  var wrap=document.getElementById('qrMapWrap');
+  wrap.innerHTML='<div id="qrMap" style="width:100%;height:100%;border-radius:8px"></div>';
+  wrap.style.cssText='border-radius:8px;overflow:hidden;border:1px solid #E2E5EA;height:480px';
+
+  var center={lat:ordered[0].lat,lng:ordered[0].lng};
+  var map=new google.maps.Map(document.getElementById('qrMap'),{
+    zoom:12,center:center,
+    mapTypeId:'roadmap',
+    styles:mapStyle(),
+    fullscreenControl:true,zoomControl:true
+  });
+
+  var bounds=new google.maps.LatLngBounds();
+
+  // Add start marker
+  if(startGeo){
+    bounds.extend({lat:startGeo.lat,lng:startGeo.lng});
+    new google.maps.Marker({
+      position:{lat:startGeo.lat,lng:startGeo.lng},map:map,
+      label:{text:'S',color:'#fff',fontWeight:'bold',fontSize:'11px'},
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:16,fillColor:'#1A2B1A',fillOpacity:1,strokeColor:'#5DBE6E',strokeWeight:2.5},
+      title:'Start: '+startAddr,zIndex:500
+    });
+  }
+
+  // Add stop markers
+  ordered.forEach(function(s,i){
+    bounds.extend({lat:s.lat,lng:s.lng});
+    var iw=new google.maps.InfoWindow({content:'<div style="font-size:12px;padding:6px"><strong>Stop '+(i+1)+'</strong><br>'+s.address+'</div>'});
+    var m=new google.maps.Marker({
+      position:{lat:s.lat,lng:s.lng},map:map,
+      label:{text:String(i+1),color:'#fff',fontWeight:'bold',fontSize:'11px'},
+      icon:{path:google.maps.SymbolPath.CIRCLE,scale:16,fillColor:'#2D6A4F',fillOpacity:1,strokeColor:'#fff',strokeWeight:2.5},
+      title:'Stop '+(i+1)+': '+s.address,zIndex:100+i
+    });
+    m.addListener('click',function(){iw.open(map,m);});
+  });
+  map.fitBounds(bounds,{padding:50});
+
+  // Draw route with Directions API
+  var svc=new google.maps.DirectionsService();
+  var ren=new google.maps.DirectionsRenderer({map:map,suppressMarkers:true,polylineOptions:{strokeColor:'#2D6A4F',strokeOpacity:.9,strokeWeight:5}});
+  var origin=startGeo?new google.maps.LatLng(startGeo.lat,startGeo.lng):new google.maps.LatLng(ordered[0].lat,ordered[0].lng);
+  var dest=new google.maps.LatLng(ordered[ordered.length-1].lat,ordered[ordered.length-1].lng);
+  var waypoints=ordered.slice(startGeo?0:1,startGeo?ordered.length:ordered.length-1).map(function(s){
+    return{location:new google.maps.LatLng(s.lat,s.lng),stopover:true};
+  });
+
+  svc.route({
+    origin:origin,destination:dest,waypoints:waypoints,
+    travelMode:google.maps.TravelMode.DRIVING,optimizeWaypoints:false,
+    drivingOptions:{departureTime:new Date(new Date().setHours(7,0,0,0)),trafficModel:google.maps.TrafficModel.BEST_GUESS}
+  },function(result,status){
+    if(status==='OK'){
+      ren.setDirections(result);
+      var legs=result.routes[0].legs;
+      var mi=(legs.reduce(function(s,l){return s+l.distance.value;},0)/1609).toFixed(1);
+      var mins=Math.round(legs.reduce(function(s,l){return s+(l.duration_in_traffic||l.duration).value;},0)/60);
+      statsEl.innerHTML='<strong>'+ordered.length+' stops</strong> · <strong>'+mi+' miles</strong> · <strong>~'+mins+' min</strong>'
+        +(failed.length?' · <span style="color:#D97706">'+failed.length+' skipped</span>':'')
+        +' · <button class="btn2 bsm" onclick="toggleQRDir()">Turn by Turn</button>';
+      // Show turn by turn
+      var steps=legs.reduce(function(a,l){return a.concat(l.steps);}, []);
+      document.getElementById('qrDirPanel').innerHTML=steps.map(function(st){
+        return'<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #F3F4F6;font-size:11px"><span>➤</span><span>'+st.instructions.replace(/<[^>]+>/g,'')+' </span><span style="margin-left:auto;white-space:nowrap;color:#6b7280;font-size:10px">'+st.distance.text+'</span></div>';
+      }).join('');
+    }
+  });
+
+  // Store for copy/print
+  window._qrOrdered=ordered;
+  window._qrStart=startAddr;
+  toast('Route ready','ok');
+}
+
+function toggleQRDir(){
+  var el=document.getElementById('qrDirPanel');
+  el.style.display=el.style.display==='none'||!el.style.display?'block':'none';
+}
+
+function copyQuickRoute(){
+  if(!window._qrOrdered||!window._qrOrdered.length){toast('Run a route first','err');return;}
+  var txt='QUICK ROUTE\n'+(window._qrStart?'Start: '+window._qrStart+'\n':'')+'─'.repeat(36)+'\n';
+  window._qrOrdered.forEach(function(s,i){txt+=(i+1)+'. '+s.address+'\n';});
+  txt+='─'.repeat(36);
+  navigator.clipboard.writeText(txt).then(function(){toast('Route copied to clipboard','ok');});
+}
+
+function printQuickRoute(){
+  if(!window._qrOrdered||!window._qrOrdered.length){toast('Run a route first','err');return;}
+  var w=window.open('','_blank');
+  var html='<html><body style="font-family:Arial,sans-serif;padding:20px;max-width:500px">'
+    +'<h2 style="color:#1A2B1A">⚡ Quick Route</h2>'
+    +(window._qrStart?'<p><strong>Start:</strong> '+window._qrStart+'</p>':'')
+    +'<ol style="line-height:2">'+window._qrOrdered.map(function(s){return'<li>'+s.address+'</li>';}).join('')+'</ol>'
+    +'<p style="color:#6b7280;font-size:11px">Generated by RouteLoop</p>'
+    +'<script>window.print();<\/script></body></html>';
+  w.document.write(html);w.document.close();
+}
 function loadGMaps(){
   if(window.google&&window.google.maps){S.gmReady=true;return;}
   var s=document.createElement('script');
@@ -2057,10 +2256,11 @@ function showPage(name,el){
   document.querySelectorAll('.ni').forEach(function(i){i.classList.remove('on');});
   document.getElementById('page-'+name).classList.add('on');
   if(el)el.classList.add('on');
-  var titles={cal:'Monthly Schedule',maps:'Route Maps',duesoon:'Due Soon',depts:'Departments',drvs:'Drivers',clients:'Clients & History'};
+  var titles={cal:'Monthly Schedule',maps:'Route Maps',quickroute:'Quick Route',duesoon:'Due Soon',depts:'Departments',drvs:'Drivers',clients:'Clients & History'};
   document.getElementById('pageTitle').textContent=titles[name]||name;
   if(name==='cal')renderCalendar();
   if(name==='maps'){document.getElementById('mapDate').value=S.selDate||new Date().toISOString().split('T')[0];renderMaps();}
+  if(name==='quickroute'){if(!S.gmReady)loadGMaps();}
   if(name==='drvs')renderDrvTable();
   if(name==='depts')renderDeptCards();
   if(name==='clients'){renderClientTbl();populateSelects();}
