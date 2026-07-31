@@ -154,11 +154,13 @@ textarea{resize:vertical;min-height:60px}
 /* LOGIN */
 .login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#1A2B1A 0%,#2D4A2D 100%);display:flex;align-items:center;justify-content:center;z-index:9999;flex-direction:column;gap:0}
 .login-card{background:#fff;border-radius:16px;padding:36px 40px;width:360px;max-width:94vw;box-shadow:0 24px 80px rgba(0,0,0,.35);text-align:center}
-.login-logo{font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1A2B1A;margin-bottom:4px}
-.logo-plus{font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#2D6A4F;vertical-align:middle;position:relative;top:-4px;margin:0 1px}
+.login-logo{display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:4px}
+.login-logo-icon{width:32px;height:42px;background:#2D6A4F;border-radius:4px;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:6px 0;flex-shrink:0}
+.login-logo-icon span{width:10px;height:10px;background:#fff;border-radius:2px;display:block}
+.login-logo-text{font-family:Georgia,serif;font-size:30px;font-weight:700;color:#1A2B1A;line-height:1}
+.login-logo-text em{font-style:normal;font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#2D6A4F;vertical-align:middle;position:relative;top:-5px;margin:0 1px}
+.login-logo-text strong{color:#2D6A4F;font-weight:700}
 .brand-plus{font-family:Arial,sans-serif;font-size:9px;font-weight:700;color:#5DBE6E;vertical-align:middle;position:relative;top:-3px;margin:0 1px}
-.login-logo .logo-plus{color:#2D6A4F}
-.login-logo span:last-child{color:#2D6A4F}
 .login-tag{font-size:11px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px;margin-bottom:28px}
 .login-users{display:flex;flex-direction:column;gap:8px;margin-bottom:20px}
 .login-user{display:flex;align-items:center;gap:10px;padding:10px 14px;border:1.5px solid #E2E5EA;border-radius:8px;cursor:pointer;text-align:left;background:#fff;transition:all .12s}
@@ -185,16 +187,9 @@ textarea{resize:vertical;min-height:60px}
 <!-- LOGIN SCREEN -->
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
-    <div style="margin-bottom:4px">
-      <svg width="180" height="44" viewBox="0 0 180 44" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="4" width="28" height="36" rx="3" fill="#2D6A4F"/>
-        <rect x="11" y="9" width="6" height="6" rx="1" fill="#fff"/>
-        <rect x="11" y="19" width="6" height="6" rx="1" fill="#fff"/>
-        <rect x="11" y="29" width="6" height="6" rx="1" fill="#fff"/>
-        <text x="36" y="34" font-family="Georgia,serif" font-size="32" font-weight="700" fill="#1A2B1A">A</text>
-        <text x="60" y="24" font-family="Arial,sans-serif" font-size="14" font-weight="700" fill="#2D6A4F">+</text>
-        <text x="72" y="34" font-family="Georgia,serif" font-size="32" font-weight="700" fill="#2D6A4F">Route</text>
-      </svg>
+    <div class="login-logo">
+      <div class="login-logo-icon"><span></span><span></span><span></span></div>
+      <div class="login-logo-text">A<em>+</em><strong>Route</strong></div>
     </div>
     <div class="login-tag">Dispatch Management</div>
     <div id="loginStep1">
@@ -320,17 +315,16 @@ textarea{resize:vertical;min-height:60px}
 
 <div class="app" id="mainApp" style="display:none">
 <nav class="nav">
-  <div class="logo">
-  <svg width="130" height="28" viewBox="0 0 130 28" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="2" width="18" height="24" rx="2" fill="#5DBE6E"/>
-    <rect x="7" y="5" width="4" height="4" rx="0.5" fill="#1A2B1A"/>
-    <rect x="7" y="12" width="4" height="4" rx="0.5" fill="#1A2B1A"/>
-    <rect x="7" y="19" width="4" height="4" rx="0.5" fill="#1A2B1A"/>
-    <text x="24" y="22" font-family="Georgia,serif" font-size="20" font-weight="700" fill="#ffffff">A</text>
-    <text x="38" y="16" font-family="Arial,sans-serif" font-size="10" font-weight="700" fill="#5DBE6E">+</text>
-    <text x="46" y="22" font-family="Georgia,serif" font-size="20" font-weight="700" fill="#5DBE6E">Route</text>
-  </svg>
-  <div class="tag">Dispatch</div>
+  <div class="logo" style="display:flex;align-items:center;gap:8px;padding:14px 18px 12px;border-bottom:1px solid #2a3d2a">
+  <div style="width:18px;height:24px;background:#5DBE6E;border-radius:2px;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:3px 0;flex-shrink:0">
+    <span style="width:8px;height:5px;background:#1A2B1A;border-radius:1px;display:block"></span>
+    <span style="width:8px;height:5px;background:#1A2B1A;border-radius:1px;display:block"></span>
+    <span style="width:8px;height:5px;background:#1A2B1A;border-radius:1px;display:block"></span>
+  </div>
+  <div>
+    <div class="brand">A<span class="brand-plus">+</span><span style="color:#5DBE6E">Route</span></div>
+    <div class="tag">Dispatch</div>
+  </div>
 </div>
   <div class="depts"><div class="dl">Department</div><div id="deptPills"></div></div>
   <div class="nsec">Operations</div>
