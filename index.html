@@ -218,8 +218,66 @@ textarea{resize:vertical;min-height:60px}
       <div class="setup-hint" id="setupHint" style="display:none">This is your first login. Enter a 4-digit PIN to set up your account.</div>
     </div>
   </div>
+  <div style="margin-top:16px;font-size:10px;color:#7aaa7a;text-align:center">
+    <a href="#" onclick="openModal('termsMo')" style="color:#7aaa7a;text-decoration:underline">Terms of Service</a>
+    &nbsp;·&nbsp;
+    <a href="#" onclick="openModal('privacyMo')" style="color:#7aaa7a;text-decoration:underline">Privacy Policy</a>
+    &nbsp;·&nbsp;© 2026 RouteLoop
+  </div>
 </div>
 
+
+<!-- TERMS OF SERVICE MODAL -->
+<div class="mo" id="termsMo">
+  <div class="modal" style="width:600px;max-height:80vh;overflow-y:auto">
+    <h2>Terms of Service</h2>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      <p style="font-size:10px;color:#6b7280;margin-bottom:14px">Last updated: July 30, 2026</p>
+      <p style="font-weight:700;margin-bottom:4px">1. Acceptance of Terms</p>
+      <p style="margin-bottom:12px">By accessing or using RouteLoop ("the Software"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Software.</p>
+      <p style="font-weight:700;margin-bottom:4px">2. License</p>
+      <p style="margin-bottom:12px">RouteLoop grants you a limited, non-exclusive, non-transferable license to use the Software solely for your internal business operations. You may not sublicense, sell, resell, transfer, assign, or otherwise commercially exploit the Software.</p>
+      <p style="font-weight:700;margin-bottom:4px">3. Prohibited Use</p>
+      <p style="margin-bottom:12px">You may not: (a) copy, modify, or create derivative works of the Software; (b) reverse engineer, decompile, or disassemble the Software; (c) use the Software to build a competing product; (d) share your login credentials with unauthorised users; (e) use the Software for any unlawful purpose.</p>
+      <p style="font-weight:700;margin-bottom:4px">4. Intellectual Property</p>
+      <p style="margin-bottom:12px">The Software, including all code, design, features, and branding, is the exclusive property of RouteLoop and is protected by copyright law. All rights not expressly granted are reserved.</p>
+      <p style="font-weight:700;margin-bottom:4px">5. Data</p>
+      <p style="margin-bottom:12px">You retain ownership of all data you import into the Software. RouteLoop does not sell your data to third parties. You are responsible for ensuring your data complies with applicable privacy laws.</p>
+      <p style="font-weight:700;margin-bottom:4px">6. Limitation of Liability</p>
+      <p style="margin-bottom:12px">To the maximum extent permitted by law, RouteLoop shall not be liable for any indirect, incidental, or consequential damages arising from your use of the Software.</p>
+      <p style="font-weight:700;margin-bottom:4px">7. Termination</p>
+      <p style="margin-bottom:12px">RouteLoop reserves the right to suspend or terminate your access at any time for violation of these Terms.</p>
+      <p style="font-weight:700;margin-bottom:4px">8. Contact</p>
+      <p>For questions about these Terms, contact us at support@routeloop.app</p>
+    </div>
+    <div class="mfoot"><button class="btn" onclick="closeModal('termsMo')">Close</button></div>
+  </div>
+</div>
+
+<!-- PRIVACY POLICY MODAL -->
+<div class="mo" id="privacyMo">
+  <div class="modal" style="width:600px;max-height:80vh;overflow-y:auto">
+    <h2>Privacy Policy</h2>
+    <div style="font-size:12px;color:#374151;line-height:1.8">
+      <p style="font-size:10px;color:#6b7280;margin-bottom:14px">Last updated: July 30, 2026</p>
+      <p style="font-weight:700;margin-bottom:4px">1. Information We Collect</p>
+      <p style="margin-bottom:12px">RouteLoop collects only the information necessary to operate the Software: account information (name and PIN hash); operational data (addresses, routes, and schedules you import); and basic usage data for performance monitoring.</p>
+      <p style="font-weight:700;margin-bottom:4px">2. How We Use Your Information</p>
+      <p style="margin-bottom:12px">We use your information solely to provide and improve the Software, authenticate users, store and display your routing data, and communicate with you about your account.</p>
+      <p style="font-weight:700;margin-bottom:4px">3. Data Storage</p>
+      <p style="margin-bottom:12px">Your data is stored securely in Supabase. Route optimisation and mapping services are provided by Google Maps Platform. We do not store payment card information.</p>
+      <p style="font-weight:700;margin-bottom:4px">4. Data Sharing</p>
+      <p style="margin-bottom:12px">We do not sell, trade, or rent your data to third parties. We share data only with service providers necessary to operate the Software and only as required by law.</p>
+      <p style="font-weight:700;margin-bottom:4px">5. Client Address Data</p>
+      <p style="margin-bottom:12px">Property addresses and service schedules you import are your business data. RouteLoop does not access, analyse, or share this data beyond what is needed to display it to your authorised users.</p>
+      <p style="font-weight:700;margin-bottom:4px">6. Your Rights</p>
+      <p style="margin-bottom:12px">You may request deletion of your account and data at any time by contacting us. We process deletion requests within 30 days.</p>
+      <p style="font-weight:700;margin-bottom:4px">7. Contact</p>
+      <p>For privacy questions, contact us at privacy@routeloop.app</p>
+    </div>
+    <div class="mfoot"><button class="btn" onclick="closeModal('privacyMo')">Close</button></div>
+  </div>
+</div>
 
 <!-- USER MANAGEMENT MODAL (admin only) -->
 <div class="mo" id="userMo">
@@ -261,6 +319,12 @@ textarea{resize:vertical;min-height:60px}
   <div class="ni" onclick="showPage('clients',this)">🏠 Clients</div>
   <div class="ni admin-only" onclick="openModal('userMo');renderUserList()" style="display:none">👥 Users</div>
   <div class="ni" onclick="doLogout()" style="margin-top:auto;color:#fca5a5">🔒 Sign Out</div>
+  <div style="padding:8px 14px;font-size:9px;color:#3d5c3d;text-align:center;border-top:1px solid #2a3d2a;margin-top:4px">
+    <a href="#" onclick="openModal('termsMo')" style="color:#5a7a5a;text-decoration:none">Terms</a>
+    &nbsp;·&nbsp;
+    <a href="#" onclick="openModal('privacyMo')" style="color:#5a7a5a;text-decoration:none">Privacy</a>
+    &nbsp;·&nbsp;© 2026 RouteLoop
+  </div>
   <div class="nb">
     <div class="depot-box"><strong>Active Depot</strong><span id="depotTxt">Not set</span></div>
     <button class="btn2 bsm" style="width:100%;margin-top:5px" onclick="openModal('depotMo')">Edit Depot</button>
