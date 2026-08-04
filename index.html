@@ -584,6 +584,10 @@ textarea{resize:vertical;min-height:60px}
       </div>
       <input type="date" id="impStartDate">
       <div style="font-size:10px;color:#6b7280;margin-top:3px">Stops scheduled Mon-Thu starting from this date. Drivers alternate days so routes stay geographically tight.</div>
+      <div style="margin-top:6px;display:flex;align-items:center;gap:8px">
+        <input type="checkbox" id="impIncludeFri" style="width:14px;height:14px">
+        <label for="impIncludeFri" style="font-size:11px;color:#374151;cursor:pointer">Include Fridays in scheduling</label>
+      </div>
     </div>
       <div class="fg"><label class="fl">Scheduling Mode</label>
         <div style="display:flex;gap:8px;margin-bottom:6px">
@@ -632,8 +636,9 @@ textarea{resize:vertical;min-height:60px}
     <div id="reassignAddr" style="font-size:11px;padding:7px 9px;background:#F9FAFB;border-radius:5px;margin-bottom:12px"></div>
     <div class="fr2">
       <div class="fg"><label class="fl">Driver</label><select id="reDrv"></select></div>
-      <div class="fg"><label class="fl">Date</label><input type="date" id="reDate"></div>
+      <div class="fg"><label class="fl">New Date</label><input type="date" id="reDate"></div>
     </div>
+    <div style="font-size:10px;color:#6b7280;margin-bottom:8px">You can schedule on any day including Friday. Weekends are not recommended.</div>
     <input type="hidden" id="reStopId">
     <div class="mfoot"><button class="btn2" onclick="closeModal('reassignMo')">Cancel</button><button class="btn" onclick="doReassign()">Reschedule</button></div>
   </div>
@@ -1209,7 +1214,7 @@ function renderCalendar(){
     var isToday=ds===today,isSel=ds===S.selDate,isPast=ds<today;
     var stops=S.stops.filter(function(s){return s.scheduled_date===ds;});
     if(S.calDrv)stops=stops.filter(function(s){return s.driver_id===S.calDrv;});
-    var cls='cc'+(isFri?' fri nc':isWknd?' empty nc':'')+(isToday?' today':'')+(isSel?' sel':'')+(isPast&&!isToday?' past':'');
+    var cls='cc'+(isFri?' fri':isWknd?' empty nc':'')+(isToday?' today':'')+(isSel?' sel':'')+(isPast&&!isToday?' past':'');
     var drvIds=[...new Set(stops.map(function(s){return s.driver_id;}))];
     var lines=drvIds.slice(0,3).map(function(did){
       var d=S.drvs.find(function(x){return x.id===did;});
@@ -1219,10 +1224,10 @@ function renderCalendar(){
       var roundStr=rounds.length?' <span style="font-size:8px;font-weight:700;opacity:.8">'+rounds.slice(0,2).join(', ')+'</span>':'';
       return'<div class="cdl" style="background:'+(d?d.color:'#6b7280')+'22;color:'+(d?d.color:'#6b7280')+'">'+(d?d.name:'?')+': '+done+'/'+cnt+roundStr+'</div>';
     }).join('');
-    html+='<div class="'+cls+'" '+( (!isFri&&!isWknd)?'onclick="selectDate(this.dataset.ds)" data-ds="'+ds+'"':''  )+'>';
+    html+='<div class="'+cls+'" '+((!isWknd)?'onclick="selectDate(this.dataset.ds)" data-ds="'+ds+'"':'')+'>';
     html+='<div class="cdn">'+(isToday?'<div class="tbub">'+day+'</div>':day)+'</div>';
-    if(isFri)html+='<div style="font-size:9px;color:#D97706;font-weight:600">OPEN</div>';
-    if(stops.length&&!isFri)html+='<div class="csc">'+stops.length+' stop'+(stops.length!==1?'s':'')+'</div>';
+    if(isFri&&!stops.length)html+='<div style="font-size:9px;color:#D97706;font-weight:600">OPEN</div>';
+    if(stops.length)html+='<div class="csc">'+stops.length+' stop'+(stops.length!==1?'s':'')+'</div>';
     html+=lines+'</div>';
   }
   el.innerHTML=html;
@@ -1902,7 +1907,8 @@ async function doImport(){
   // Assign clusters to drivers alternately across work dates
   // This ensures each driver gets geographically tight clusters on different days
   var schedule=[];
-  var workDates=getWorkDates(90,document.getElementById('impStartDate').value||null);
+  var includeFriday=document.getElementById('impIncludeFri')?document.getElementById('impIncludeFri').checked:false;
+  var workDates=getWorkDates(90,document.getElementById('impStartDate').value||null,includeFriday);
   var drvDateUsed={};
   selDrvs.forEach(function(d){drvDateUsed[d.id]=new Set();});
 
@@ -2057,19 +2063,18 @@ function geoCluster(items,maxSize,depotGeo){
   return clusters;
 }
 
-function getWorkDates(maxDays,startDate){
+function getWorkDates(maxDays,startDate,includeFriday){
   var dates=[];
   var cursor=startDate?new Date(startDate+'T12:00:00'):new Date();
   cursor.setHours(12,0,0,0);
-  // If start date falls on Fri/Sat/Sun push to next Monday
   var d=cursor.getDay();
-  if(d===5)cursor.setDate(cursor.getDate()+3);
-  else if(d===6)cursor.setDate(cursor.getDate()+2);
+  if(d===6)cursor.setDate(cursor.getDate()+2);
   else if(d===0)cursor.setDate(cursor.getDate()+1);
   var count=0;
   while(dates.length<maxDays&&count<maxDays*3){
     var wd=cursor.getDay();
-    if(wd>=1&&wd<=4)dates.push(cursor.toISOString().split('T')[0]);
+    var validDay=includeFriday?(wd>=1&&wd<=5):(wd>=1&&wd<=4);
+    if(validDay)dates.push(cursor.toISOString().split('T')[0]);
     cursor.setDate(cursor.getDate()+1);count++;
   }
   return dates;
