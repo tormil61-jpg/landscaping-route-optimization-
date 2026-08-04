@@ -439,7 +439,7 @@ textarea{resize:vertical;min-height:60px}
             </div>
           </div>
           <div class="fg">
-            <label class="fl">Addresses — one per line (max 15)</label>
+            <label class="fl">Addresses — one per line (max 30)</label>
             <div style="font-size:10px;color:#6b7280;margin-bottom:4px">Paste full addresses including city and state for best results. If all addresses are in the same city, partial addresses work too.</div>
             <textarea id="qrAddresses" style="height:340px;font-size:12px;line-height:1.7;resize:vertical" placeholder="704 Baerwald Rd, Gainesville, FL 32606&#10;8982 SW 73rd Ln, Gainesville, FL 32608&#10;7983 SW 80th Ln, Gainesville, FL 32608&#10;&#10;— or short form if same city —&#10;704 Baerwald Rd&#10;8982 SW 73rd Ln&#10;7983 SW 80th Ln"></textarea>
           </div>
@@ -2256,7 +2256,7 @@ async function runQuickRoute(){
   var lines=raw.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>3;});
 
   if(!lines.length){toast('Paste at least one address','err');return;}
-  if(lines.length>25){toast('Maximum 25 addresses. Remove '+(lines.length-25)+' addresses.','err');return;}
+  if(lines.length>30){toast('Maximum 30 addresses. Remove '+(lines.length-30)+' addresses.','err');return;}
 
   // Check limit mode
   var limitMode=document.getElementById('qrLimitMode')?document.getElementById('qrLimitMode').value:'stops';
