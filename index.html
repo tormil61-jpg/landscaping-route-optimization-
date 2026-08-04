@@ -1503,6 +1503,44 @@ function nnSort(stops,origin){
   }
   return ord;
 }
+async function optimiseQuickRouteStops(stops,startGeo){
+  // Quick Route version - no depot return, just best order start to end
+  if(!stops.length)return stops;
+  if(!S.gmReady)return nnSort(stops,startGeo);
+  var origin=startGeo
+    ?new google.maps.LatLng(startGeo.lat,startGeo.lng)
+    :new google.maps.LatLng(stops[0].lat,stops[0].lng);
+  var stopsForRoute=startGeo?stops:stops.slice(1);
+  var destination=new google.maps.LatLng(stops[stops.length-1].lat,stops[stops.length-1].lng);
+  if(stopsForRoute.length===0)return stops;
+  return new Promise(function(resolve){
+    new google.maps.DirectionsService().route({
+      origin:origin,
+      destination:destination,
+      waypoints:stopsForRoute.slice(0,stopsForRoute.length-1).map(function(s){
+        return{location:new google.maps.LatLng(s.lat,s.lng),stopover:true};
+      }),
+      optimizeWaypoints:true,
+      travelMode:google.maps.TravelMode.DRIVING,
+      drivingOptions:{departureTime:new Date(new Date().setHours(7,0,0,0)),trafficModel:google.maps.TrafficModel.BEST_GUESS}
+    },function(result,status){
+      if(status==='OK'&&result.routes[0]){
+        var order=result.routes[0].waypoint_order;
+        var waypoints=stopsForRoute.slice(0,stopsForRoute.length-1);
+        var reordered=order.map(function(i){return waypoints[i];});
+        var finalStop=stopsForRoute[stopsForRoute.length-1];
+        var allOrdered=startGeo
+          ?reordered.concat([finalStop])
+          :stops.slice(0,1).concat(reordered).concat([finalStop]);
+        resolve(allOrdered);
+      } else {
+        console.warn('Quick Route Directions failed:',status,'- using NN');
+        resolve(nnSort(stops,startGeo));
+      }
+    });
+  });
+}
+
 async function optimiseRoute(stops,depotAddr){
   if(!stops.length)return stops;
   if(!S.gmReady)return nnSort(stops,null);
@@ -2224,7 +2262,8 @@ async function runQuickRoute(){
   toast('Optimising route...');
 
   // Optimise route
-  var ordered=await optimiseRoute(geocoded,startAddr&&startGeo?startAddr:null);
+  // Quick Route uses Google Routes optimised start to finish (no depot return)
+  var ordered=await optimiseQuickRouteStops(geocoded,startGeo);
 
   // Show stats
   var statsEl=document.getElementById('qrStats');
@@ -2363,7 +2402,7 @@ async function reOptimiseQuickRoute(){
   var startAddr=document.getElementById('qrStart').value.trim();
   var startGeo=null;
   if(startAddr)startGeo=await geocodeAddr(startAddr,null);
-  var ordered=await optimiseRoute(window._qrOrdered,startAddr&&startGeo?startAddr:null);
+  var ordered=await optimiseQuickRouteStops(window._qrOrdered,startGeo);
   window._qrOrdered=ordered;
   renderQRStopList();
   // Redraw map
