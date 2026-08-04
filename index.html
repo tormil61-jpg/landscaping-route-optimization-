@@ -1389,18 +1389,29 @@ async function dropStop(e,targetId){
 // GEOCODE + OPTIMISE
 // ═══════════════════════════════════════
 async function clearScheduledRoutes(){
-  var opts=['This month only','All pending routes','All routes including completed'];
   var choice=confirm(
     'What do you want to clear?\n\n' +
-    'OK = Clear ALL PENDING routes for the current month\n' +
-    'Cancel = Do nothing\n\n' +
-    'To clear all routes go to Supabase and run: DELETE FROM route_stops WHERE status=\'pending\''
+    'OK = Clear pending routes for the SELECTED DAY\n' +
+    'Cancel = Clear pending routes for the ENTIRE MONTH\n\n' +
+    'Press OK for selected day, Cancel for full month'
   );
-  if(!choice)return;
-  // Clear pending stops for current calendar month
-  var start=new Date(S.calY,S.calM,1).toISOString().split('T')[0];
-  var end=new Date(S.calY,S.calM+1,0).toISOString().split('T')[0];
-  toast('Clearing pending routes for '+new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'})+'...');
+  var start,end,label;
+  if(choice&&S.selDate){
+    // Clear selected day
+    start=S.selDate;
+    end=S.selDate;
+    label='routes for '+S.selDate;
+  } else if(choice&&!S.selDate){
+    toast('Click a day on the calendar first to clear just that day','err');
+    return;
+  } else {
+    // Clear whole month
+    start=new Date(S.calY,S.calM,1).toISOString().split('T')[0];
+    end=new Date(S.calY,S.calM+1,0).toISOString().split('T')[0];
+    label='all pending routes for '+new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
+  }
+  if(!confirm('Are you sure you want to clear '+label+'? This cannot be undone.'))return;
+  toast('Clearing...');
   var r=await fetch(SUPA+'/rest/v1/route_stops?status=eq.pending&scheduled_date=gte.'+start+'&scheduled_date=lte.'+end,{
     method:'DELETE',headers:H
   });
@@ -1408,8 +1419,9 @@ async function clearScheduledRoutes(){
     S.stops=S.stops.filter(function(s){
       return!(s.status==='pending'&&s.scheduled_date>=start&&s.scheduled_date<=end);
     });
+    S.selDate=null;
     renderCalendar();renderStatusBar();
-    toast('Pending routes cleared for this month','ok');
+    toast('Cleared '+label,'ok');
   } else {
     toast('Error clearing routes','err');
   }
