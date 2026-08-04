@@ -190,14 +190,10 @@ textarea{resize:vertical;min-height:60px}
 <!-- LOGIN SCREEN -->
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
-    <div style="margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:10px">
-      <div style="width:34px;height:44px;background:#2D6A4F;border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:7px 0">
-        <div style="width:12px;height:12px;background:#fff;border-radius:2px"></div>
-        <div style="width:12px;height:12px;background:#fff;border-radius:2px"></div>
-        <div style="width:12px;height:12px;background:#fff;border-radius:2px"></div>
-      </div>
-      <div style="font-family:Georgia,serif;font-size:32px;font-weight:700;color:#1A2B1A;line-height:1">
-        A<span style="font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#2D6A4F;vertical-align:middle;position:relative;top:-6px;margin:0 1px">+</span><span style="color:#2D6A4F">Route</span>
+    <div style="margin-bottom:4px;text-align:center">
+      <div style="font-size:36px;margin-bottom:2px">🗺</div>
+      <div style="font-family:Georgia,serif;font-size:34px;font-weight:700;color:#1A2B1A;line-height:1">
+        A<span style="font-family:Arial,sans-serif;font-size:18px;font-weight:700;color:#2D6A4F;vertical-align:middle;position:relative;top:-6px;margin:0 1px">+</span><span style="color:#2D6A4F">Route</span>
       </div>
     </div>
     <div class="login-tag">Dispatch Management</div>
@@ -324,17 +320,15 @@ textarea{resize:vertical;min-height:60px}
 
 <div class="app" id="mainApp" style="display:none">
 <nav class="nav">
-  <div class="logo" style="display:flex;align-items:center;gap:8px;padding:14px 18px 12px;border-bottom:1px solid #2a3d2a">
-  <div style="width:18px;height:24px;background:#5DBE6E;border-radius:2px;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:3px 0;flex-shrink:0">
-    <span style="width:8px;height:5px;background:#1A2B1A;border-radius:1px;display:block"></span>
-    <span style="width:8px;height:5px;background:#1A2B1A;border-radius:1px;display:block"></span>
-    <span style="width:8px;height:5px;background:#1A2B1A;border-radius:1px;display:block"></span>
+  <div class="logo">
+    <div style="display:flex;align-items:center;gap:8px">
+      <div style="font-size:20px;line-height:1">🗺</div>
+      <div>
+        <div class="brand">A<span class="brand-plus">+</span><span style="color:#5DBE6E">Route</span></div>
+        <div class="tag">Dispatch</div>
+      </div>
+    </div>
   </div>
-  <div>
-    <div class="brand">A<span class="brand-plus">+</span><span style="color:#5DBE6E">Route</span></div>
-    <div class="tag">Dispatch</div>
-  </div>
-</div>
   <div class="depts"><div class="dl">Department</div><div id="deptPills"></div></div>
   <div class="nsec">Operations</div>
   <div class="ni on" onclick="showPage('cal',this)">📅 Monthly Schedule</div>
@@ -381,6 +375,7 @@ textarea{resize:vertical;min-height:60px}
         <button class="btn2 bsm" onclick="nextMonth()">Next →</button>
         <div style="margin-left:auto;display:flex;gap:5px">
           <button class="btn2 bsm" onclick="runOptimise()">🗺 Geocode & Optimise</button>
+          <button class="btnd bsm" onclick="clearScheduledRoutes()" style="font-size:11px">🗑 Clear Routes</button>
         </div>
       </div>
       <div class="cgrid" id="calGrid"></div>
@@ -1381,6 +1376,33 @@ async function dropStop(e,targetId){
 // ═══════════════════════════════════════
 // GEOCODE + OPTIMISE
 // ═══════════════════════════════════════
+async function clearScheduledRoutes(){
+  var opts=['This month only','All pending routes','All routes including completed'];
+  var choice=confirm(
+    'What do you want to clear?\n\n' +
+    'OK = Clear ALL PENDING routes for the current month\n' +
+    'Cancel = Do nothing\n\n' +
+    'To clear all routes go to Supabase and run: DELETE FROM route_stops WHERE status=\'pending\''
+  );
+  if(!choice)return;
+  // Clear pending stops for current calendar month
+  var start=new Date(S.calY,S.calM,1).toISOString().split('T')[0];
+  var end=new Date(S.calY,S.calM+1,0).toISOString().split('T')[0];
+  toast('Clearing pending routes for '+new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'})+'...');
+  var r=await fetch(SUPA+'/rest/v1/route_stops?status=eq.pending&scheduled_date=gte.'+start+'&scheduled_date=lte.'+end,{
+    method:'DELETE',headers:H
+  });
+  if(r.ok){
+    S.stops=S.stops.filter(function(s){
+      return!(s.status==='pending'&&s.scheduled_date>=start&&s.scheduled_date<=end);
+    });
+    renderCalendar();renderStatusBar();
+    toast('Pending routes cleared for this month','ok');
+  } else {
+    toast('Error clearing routes','err');
+  }
+}
+
 function runOptimise(){if(S.selDate)runOptimiseDate(S.selDate);else toast('Click a date on the calendar first','err');}
 
 async function runOptimiseDate(ds){
