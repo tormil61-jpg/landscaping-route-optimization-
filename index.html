@@ -187,9 +187,15 @@ textarea{resize:vertical;min-height:60px}
 <!-- LOGIN SCREEN -->
 <div id="loginScreen" class="login-screen">
   <div class="login-card">
-    <div class="login-logo">
-      <div class="login-logo-icon"><span></span><span></span><span></span></div>
-      <div class="login-logo-text">A<em>+</em><strong>Route</strong></div>
+    <div style="margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:10px">
+      <div style="width:34px;height:44px;background:#2D6A4F;border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:space-evenly;padding:7px 0">
+        <div style="width:12px;height:12px;background:#fff;border-radius:2px"></div>
+        <div style="width:12px;height:12px;background:#fff;border-radius:2px"></div>
+        <div style="width:12px;height:12px;background:#fff;border-radius:2px"></div>
+      </div>
+      <div style="font-family:Georgia,serif;font-size:32px;font-weight:700;color:#1A2B1A;line-height:1">
+        A<span style="font-family:Arial,sans-serif;font-size:16px;font-weight:700;color:#2D6A4F;vertical-align:middle;position:relative;top:-6px;margin:0 1px">+</span><span style="color:#2D6A4F">Route</span>
+      </div>
     </div>
     <div class="login-tag">Dispatch Management</div>
     <div id="loginStep1">
@@ -425,7 +431,7 @@ textarea{resize:vertical;min-height:60px}
           <div class="fg">
             <label class="fl">Addresses — one per line (max 15)</label>
             <div style="font-size:10px;color:#6b7280;margin-bottom:4px">Paste full addresses including city and state for best results. If all addresses are in the same city, partial addresses work too.</div>
-            <textarea id="qrAddresses" style="height:300px;font-size:12px;line-height:1.7;resize:vertical" placeholder="704 Baerwald Rd, Gainesville, FL 32606&#10;8982 SW 73rd Ln, Gainesville, FL 32608&#10;7983 SW 80th Ln, Gainesville, FL 32608&#10;&#10;— or short form if same city —&#10;704 Baerwald Rd&#10;8982 SW 73rd Ln&#10;7983 SW 80th Ln"></textarea>
+            <textarea id="qrAddresses" style="height:340px;font-size:12px;line-height:1.7;resize:vertical" placeholder="704 Baerwald Rd, Gainesville, FL 32606&#10;8982 SW 73rd Ln, Gainesville, FL 32608&#10;7983 SW 80th Ln, Gainesville, FL 32608&#10;&#10;— or short form if same city —&#10;704 Baerwald Rd&#10;8982 SW 73rd Ln&#10;7983 SW 80th Ln"></textarea>
           </div>
           <div id="qrStats" style="display:none;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:10px 12px;font-size:12px;margin-bottom:10px"></div>
           <div id="qrList" style="display:none"></div>
@@ -706,7 +712,7 @@ async function initLogin(){
     users=await dbGet('app_users','&order=created_at.asc');
   }
   S.appUsers=users;
-  var sid=sessionStorage.getItem('rl_user');
+  var sid=localStorage.getItem('rl_user');
   if(sid){var u=users.find(function(x){return x.id===sid;});if(u){loginSuccess(u);return;}}
   renderLoginUsers();
 }
@@ -778,7 +784,7 @@ function simpleHash(str){
 
 function loginSuccess(u){
   L.user=u;
-  sessionStorage.setItem('rl_user',u.id);
+  localStorage.setItem('rl_user',u.id);
   document.getElementById('loginScreen').style.display='none';
   document.getElementById('mainApp').style.display='flex';
   // Dispatchers have full access to all features
@@ -791,7 +797,7 @@ function loginSuccess(u){
 }
 
 function doLogout(){
-  sessionStorage.removeItem('rl_user');L.user=null;L.pin='';
+  localStorage.removeItem('rl_user');L.user=null;L.pin='';
   document.getElementById('mainApp').style.display='none';
   document.getElementById('loginScreen').style.display='flex';
   document.getElementById('loginStep1').style.display='block';
@@ -945,7 +951,7 @@ function ownerFilter(){
 function ownerId(){
   if(L.user)return L.user.id;
   // Fallback — should never happen but prevents silent insert failures
-  var sid=sessionStorage.getItem('rl_user');
+  var sid=localStorage.getItem('rl_user');
   if(sid)return sid;
   return null;
 }
@@ -2175,7 +2181,7 @@ async function runQuickRoute(){
   var lines=raw.split('\n').map(function(l){return l.trim();}).filter(function(l){return l.length>3;});
 
   if(!lines.length){toast('Paste at least one address','err');return;}
-  if(lines.length>15){toast('Maximum 15 addresses. Remove '+(lines.length-15)+' addresses.','err');return;}
+  if(lines.length>25){toast('Maximum 25 addresses. Remove '+(lines.length-25)+' addresses.','err');return;}
 
   // Check limit mode
   var limitMode=document.getElementById('qrLimitMode')?document.getElementById('qrLimitMode').value:'stops';
