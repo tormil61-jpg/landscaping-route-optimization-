@@ -644,6 +644,24 @@ textarea{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<div class="mo" id="clearRoutesMo">
+  <div class="modal" style="width:420px">
+    <h2>🗑 Clear Routes</h2>
+    <p style="font-size:13px;color:#374151;margin-bottom:14px">What do you want to clear?</p>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <button class="btn" id="clearDayBtn" onclick="doClearRoutes('day')" style="background:#DC2626;border-color:#DC2626;text-align:left;padding:12px 16px">
+        <div style="font-weight:700">Clear Selected Day</div>
+        <div id="clearDayLabel" style="font-size:10px;opacity:.8;margin-top:2px">Click a day on the calendar first</div>
+      </button>
+      <button class="btn" onclick="doClearRoutes('month')" style="background:#D97706;border-color:#D97706;text-align:left;padding:12px 16px">
+        <div style="font-weight:700">Clear Entire Month</div>
+        <div id="clearMonthLabel" style="font-size:10px;opacity:.8;margin-top:2px"></div>
+      </button>
+    </div>
+    <div class="mfoot"><button class="btn2" onclick="closeModal('clearRoutesMo')">Cancel — Go Back</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1393,29 +1411,35 @@ async function dropStop(e,targetId){
 // ═══════════════════════════════════════
 // GEOCODE + OPTIMISE
 // ═══════════════════════════════════════
-async function clearScheduledRoutes(){
-  var choice=confirm(
-    'What do you want to clear?\n\n' +
-    'OK = Clear pending routes for the SELECTED DAY\n' +
-    'Cancel = Clear pending routes for the ENTIRE MONTH\n\n' +
-    'Press OK for selected day, Cancel for full month'
-  );
-  var start,end,label;
-  if(choice&&S.selDate){
-    // Clear selected day
-    start=S.selDate;
-    end=S.selDate;
-    label='routes for '+S.selDate;
-  } else if(choice&&!S.selDate){
-    toast('Click a day on the calendar first to clear just that day','err');
-    return;
+function clearScheduledRoutes(){
+  // Update modal labels
+  var dayBtn=document.getElementById('clearDayBtn');
+  var dayLabel=document.getElementById('clearDayLabel');
+  var monthLabel=document.getElementById('clearMonthLabel');
+  if(S.selDate){
+    dayBtn.style.opacity='1';dayBtn.disabled=false;
+    dayLabel.textContent='Clear all pending stops on '+S.selDate;
   } else {
-    // Clear whole month
+    dayBtn.style.opacity='.5';dayBtn.disabled=true;
+    dayLabel.textContent='Select a day on the calendar first';
+  }
+  var monthName=new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
+  monthLabel.textContent='Clear all pending stops for '+monthName;
+  openModal('clearRoutesMo');
+}
+
+async function doClearRoutes(mode){
+  var start,end,label;
+  if(mode==='day'){
+    if(!S.selDate){toast('Select a day first','err');return;}
+    start=S.selDate;end=S.selDate;
+    label='stops on '+S.selDate;
+  } else {
     start=new Date(S.calY,S.calM,1).toISOString().split('T')[0];
     end=new Date(S.calY,S.calM+1,0).toISOString().split('T')[0];
-    label='all pending routes for '+new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
+    label='all pending stops for '+new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
   }
-  if(!confirm('Are you sure you want to clear '+label+'? This cannot be undone.'))return;
+  closeModal('clearRoutesMo');
   toast('Clearing...');
   var r=await fetch(SUPA+'/rest/v1/route_stops?status=eq.pending&scheduled_date=gte.'+start+'&scheduled_date=lte.'+end,{
     method:'DELETE',headers:H
