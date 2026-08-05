@@ -1280,7 +1280,8 @@ function renderDayPanel(ds){
         var isC=s.status==='completed',isM=s.status==='missed';
         html+='<div class="sr'+(isC?' done':isM?' miss':'')+'" id="sr-'+s.id+'" data-sid="'+s.id+'" draggable="true" ondragstart="dragStart(event,this.dataset.sid)" ondragover="dragOver(event)" ondrop="dropStop(event,this.dataset.sid)">';
         html+='<div class="sn" style="background:'+(isC?'#16A34A':isM?'#DC2626':d.color)+'">'+(i+1)+'</div>';
-        html+='<div class="sa">'+s.address+'<div class="ss" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">'+(svc?svc.name:'')+(s.property_type&&s.property_type!=='unknown'?' · '+s.property_type:'')+roundBadge(s.notes)+'</div></div>';
+        var displayName=s.nickname?'<strong>'+s.nickname+'</strong> — '+s.address:s.address;
+        html+='<div class="sa">'+displayName+'<div class="ss" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">'+(svc?svc.name:'')+(s.property_type&&s.property_type!=='unknown'?' · '+s.property_type:'')+roundBadge(s.notes)+'</div></div>';
         if(!s.lat)html+='<span class="b bw">!</span>';
         if(isC)html+='<span class="b bd">Done</span>';
         if(isM)html+='<span class="b bm">Miss</span>';
@@ -1874,7 +1875,8 @@ async function doImport(){
     if(city)parts.push(city);
     if(state&&zip)parts.push(state+' '+zip);else if(state)parts.push(state);else if(zip)parts.push(zip);
     if(!/,\s*[A-Za-z]{2,}/.test(parts.join(', ')))parts.push(getCityState(deptId));
-    return{address:parts.join(', '),svcType:svc!==''?String(row[parseInt(svc)]||'').trim():'',sqft:sqftc!==''?parseFloat(row[parseInt(sqftc)])||0:0,lat:null,lng:null};
+    var nick=String(row[0]||'').trim();
+    return{address:parts.join(', '),nickname:nick,svcType:svc!==''?String(row[parseInt(svc)]||'').trim():'',sqft:sqftc!==''?parseFloat(row[parseInt(sqftc)])||0:0,lat:null,lng:null};
   }).filter(Boolean);
 
   if(!items.length){toast('No valid addresses found','err');return;}
@@ -1918,12 +1920,19 @@ async function doImport(){
     if(withCode.length)svcFiltered=withCode;
   }
 
-  // Cluster all stops into groups
-  // In sqft mode: cluster by total sqft per group not count
-  // In stops mode: cluster by count (minLim)
+  // Cluster stops — use drive-time clustering for accuracy (max 30 min between stops)
+  // Falls back to geo clustering if Google Maps not ready
   var allClusters;
   if(S.schedMode==='sqft'){
     allClusters=geoClusterSqft(svcFiltered,minLim,depotGeo);
+  } else if(S.gmReady&&svcFiltered.length>5){
+    allClusters=await driveTimeCluster(svcFiltered,30,depotGeo);
+    // Respect daily limit — split clusters larger than minLim
+    var splitClusters=[];
+    allClusters.forEach(function(c){
+      for(var i=0;i<c.length;i+=minLim)splitClusters.push(c.slice(i,i+minLim));
+    });
+    allClusters=splitClusters;
   } else {
     allClusters=geoCluster(svcFiltered,minLim,depotGeo);
   }
@@ -1983,6 +1992,7 @@ async function doImport(){
         status:'pending',
         service_type_id:svcObj?svcObj.id:null,
         notes:item.svcType||null,
+        nickname:item.nickname||null,
         sqft:item.sqft||null,
         owner_id:ownerId()
       });
@@ -2050,6 +2060,89 @@ function geoClusterSqft(items,maxSqft,depotGeo){
     }
     clusters.push(ordered);
   }
+  return clusters;
+}
+
+// Drive-time clustering — groups stops so no two consecutive stops are more than maxMinutes apart
+// Uses Google Distance Matrix API for real drive times
+async function driveTimeCluster(items, maxMinutes, depotGeo){
+  if(!items.length)return[items]; // Return as single cluster if empty
+  if(!S.gmReady||items.length<=3)return geoCluster(items,Math.min(items.length,15),depotGeo); // Fallback for small sets
+
+  maxMinutes=maxMinutes||30; // Default 30 min max between stops
+  toast('Calculating drive times for '+items.length+' stops...');
+
+  var origin=depotGeo||{lat:items[0].lat,lng:items[0].lng};
+
+  // Build distance matrix in batches of 10x10
+  var n=items.length;
+  var timeMatrix=[];
+  for(var i=0;i<n;i++)timeMatrix.push(new Array(n).fill(9999));
+
+  var batchSize=10;
+  var svc=new google.maps.DistanceMatrixService();
+
+  for(var si=0;si<n;si+=batchSize){
+    var srcBatch=items.slice(si,si+batchSize).map(function(s){return new google.maps.LatLng(s.lat,s.lng);});
+    for(var di=0;di<n;di+=batchSize){
+      var dstBatch=items.slice(di,di+batchSize).map(function(s){return new google.maps.LatLng(s.lat,s.lng);});
+      await new Promise(function(resolve){
+        svc.getDistanceMatrix({
+          origins:srcBatch,destinations:dstBatch,
+          travelMode:google.maps.TravelMode.DRIVING,
+          drivingOptions:{departureTime:new Date(new Date().setHours(7,0,0,0)),trafficModel:google.maps.TrafficModel.BEST_GUESS}
+        },function(res,status){
+          if(status==='OK'){
+            res.rows.forEach(function(row,ri){
+              row.elements.forEach(function(el,ci){
+                if(el.status==='OK'){
+                  timeMatrix[si+ri][di+ci]=Math.round(el.duration_in_traffic?el.duration_in_traffic.value/60:el.duration.value/60);
+                }
+              });
+            });
+          }
+          resolve();
+        });
+      });
+      await sleep(200); // Avoid rate limiting
+    }
+  }
+
+  // Greedy clustering — keep adding stops while drive time to next stop is under maxMinutes
+  var used=new Set();
+  var clusters=[];
+  // Start from depot — find closest stop
+  var depotTimes=items.map(function(s){return hdist(origin,s);});
+
+  while(used.size<n){
+    // Find unvisited stop closest to depot
+    var startIdx=-1;var minD=Infinity;
+    for(var i=0;i<n;i++){
+      if(!used.has(i)&&depotTimes[i]<minD){minD=depotTimes[i];startIdx=i;}
+    }
+    if(startIdx<0)break;
+
+    var cluster=[startIdx];
+    used.add(startIdx);
+    var cur=startIdx;
+
+    // Keep adding nearest unvisited stop within maxMinutes
+    while(cluster.length<15){
+      var bestNext=-1;var bestTime=Infinity;
+      for(var j=0;j<n;j++){
+        if(!used.has(j)&&timeMatrix[cur][j]<bestTime&&timeMatrix[cur][j]<=maxMinutes){
+          bestTime=timeMatrix[cur][j];bestNext=j;
+        }
+      }
+      if(bestNext<0)break; // No more stops within time limit
+      cluster.push(bestNext);
+      used.add(bestNext);
+      cur=bestNext;
+    }
+    clusters.push(cluster.map(function(i){return items[i];}));
+  }
+
+  toast('Drive-time clustering complete — '+clusters.length+' route groups');
   return clusters;
 }
 
