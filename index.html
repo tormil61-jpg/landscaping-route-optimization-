@@ -1488,8 +1488,6 @@ async function runOptimiseDate(ds){
     if(!nDrvs.length||!sDrvs.length)continue;
     var deptStops=stops.filter(function(s){return s.lat&&s.lng&&deptDrvs.some(function(d){return d.id===s.driver_id;});});
     if(!deptStops.length)continue;
-    var lats=deptStops.map(function(s){return s.lat;});
-    var midLat=(Math.min.apply(null,lats)+Math.max.apply(null,lats))/2;
     var swapped=0;
     for(var si=0;si<deptStops.length;si++){
       var stop=deptStops[si];
@@ -2063,87 +2061,95 @@ function geoClusterSqft(items,maxSqft,depotGeo){
   return clusters;
 }
 
-// Drive-time clustering — groups stops so no two consecutive stops are more than maxMinutes apart
-// Uses Google Distance Matrix API for real drive times
+// Zone-aware drive-time clustering
+// Step 1: Split stops into geographic quadrants relative to depot
+// Step 2: Within each quadrant, group by drive time
+// Step 3: Only mix quadrants when a quadrant has too few stops to fill a day
 async function driveTimeCluster(items, maxMinutes, depotGeo){
-  if(!items.length)return[items]; // Return as single cluster if empty
-  if(!S.gmReady||items.length<=3)return geoCluster(items,Math.min(items.length,15),depotGeo); // Fallback for small sets
+  if(!items.length)return[items];
+  if(!S.gmReady||items.length<=3)return geoCluster(items,Math.min(items.length,15),depotGeo);
 
-  maxMinutes=maxMinutes||30; // Default 30 min max between stops
-  toast('Calculating drive times for '+items.length+' stops...');
-
+  maxMinutes=maxMinutes||30;
   var origin=depotGeo||{lat:items[0].lat,lng:items[0].lng};
 
-  // Build distance matrix in batches of 10x10
-  var n=items.length;
-  var timeMatrix=[];
-  for(var i=0;i<n;i++)timeMatrix.push(new Array(n).fill(9999));
+  toast('Grouping stops by zone and drive time...');
 
-  var batchSize=10;
-  var svc=new google.maps.DistanceMatrixService();
+  // Step 1: Split into quadrants relative to depot
+  var depotLat=origin.lat,depotLng=origin.lng;
+  var quadrants={NW:[],NE:[],SW:[],SE:[]};
+  items.forEach(function(s){
+    var isNorth=s.lat>depotLat,isEast=s.lng>depotLng;
+    if(isNorth&&!isEast)quadrants.NW.push(s);
+    else if(isNorth&&isEast)quadrants.NE.push(s);
+    else if(!isNorth&&!isEast)quadrants.SW.push(s);
+    else quadrants.SE.push(s);
+  });
 
-  for(var si=0;si<n;si+=batchSize){
-    var srcBatch=items.slice(si,si+batchSize).map(function(s){return new google.maps.LatLng(s.lat,s.lng);});
-    for(var di=0;di<n;di+=batchSize){
-      var dstBatch=items.slice(di,di+batchSize).map(function(s){return new google.maps.LatLng(s.lat,s.lng);});
-      await new Promise(function(resolve){
-        svc.getDistanceMatrix({
-          origins:srcBatch,destinations:dstBatch,
-          travelMode:google.maps.TravelMode.DRIVING,
-          drivingOptions:{departureTime:new Date(new Date().setHours(7,0,0,0)),trafficModel:google.maps.TrafficModel.BEST_GUESS}
-        },function(res,status){
-          if(status==='OK'){
-            res.rows.forEach(function(row,ri){
-              row.elements.forEach(function(el,ci){
-                if(el.status==='OK'){
-                  timeMatrix[si+ri][di+ci]=Math.round(el.duration_in_traffic?el.duration_in_traffic.value/60:el.duration.value/60);
-                }
-              });
-            });
-          }
-          resolve();
-        });
-      });
-      await sleep(200); // Avoid rate limiting
+  // Step 2: Within each quadrant, cluster by drive time
+  var allClusters=[];
+  var smallQuadrantStops=[]; // Stops from quadrants too small to fill a day
+
+  for(var q in quadrants){
+    var qStops=quadrants[q];
+    if(!qStops.length)continue;
+
+    if(qStops.length<3){
+      // Too few — merge with similar quadrant later
+      smallQuadrantStops=smallQuadrantStops.concat(qStops);
+      continue;
     }
-  }
 
-  // Greedy clustering — keep adding stops while drive time to next stop is under maxMinutes
-  var used=new Set();
-  var clusters=[];
-  // Start from depot — find closest stop
-  var depotTimes=items.map(function(s){return hdist(origin,s);});
+    // Sort within quadrant by proximity to depot entry point
+    qStops.sort(function(a,b){return hdist(origin,a)-hdist(origin,b);});
 
-  while(used.size<n){
-    // Find unvisited stop closest to depot
-    var startIdx=-1;var minD=Infinity;
-    for(var i=0;i<n;i++){
-      if(!used.has(i)&&depotTimes[i]<minD){minD=depotTimes[i];startIdx=i;}
-    }
-    if(startIdx<0)break;
-
-    var cluster=[startIdx];
-    used.add(startIdx);
-    var cur=startIdx;
-
-    // Keep adding nearest unvisited stop within maxMinutes
-    while(cluster.length<15){
-      var bestNext=-1;var bestTime=Infinity;
-      for(var j=0;j<n;j++){
-        if(!used.has(j)&&timeMatrix[cur][j]<bestTime&&timeMatrix[cur][j]<=maxMinutes){
-          bestTime=timeMatrix[cur][j];bestNext=j;
+    // Build mini-clusters within quadrant using nearest-neighbor + 30min rule
+    var used=new Set();
+    for(var i=0;i<qStops.length;i++){
+      if(used.has(i))continue;
+      var cluster=[qStops[i]];
+      used.add(i);
+      var cur=i;
+      while(cluster.length<15){
+        var best=-1;var bestD=Infinity;
+        for(var j=0;j<qStops.length;j++){
+          if(used.has(j))continue;
+          var d=hdist(qStops[cur],qStops[j]);
+          // Convert haversine km to approx minutes (avg 60km/h in suburbs)
+          var approxMins=d*60/60;
+          if(approxMins<=maxMinutes&&d<bestD){bestD=d;best=j;}
         }
+        if(best<0)break;
+        cluster.push(qStops[best]);
+        used.add(best);
+        cur=best;
       }
-      if(bestNext<0)break; // No more stops within time limit
-      cluster.push(bestNext);
-      used.add(bestNext);
-      cur=bestNext;
+      allClusters.push(cluster);
     }
-    clusters.push(cluster.map(function(i){return items[i];}));
   }
 
-  toast('Drive-time clustering complete — '+clusters.length+' route groups');
-  return clusters;
+  // Step 3: Add leftover small-quadrant stops to nearest existing cluster
+  if(smallQuadrantStops.length){
+    smallQuadrantStops.forEach(function(s){
+      // Find the cluster whose centroid is closest
+      var bestCluster=0;var bestD=Infinity;
+      allClusters.forEach(function(c,ci){
+        var centLat=c.reduce(function(sum,x){return sum+x.lat;},0)/c.length;
+        var centLng=c.reduce(function(sum,x){return sum+x.lng;},0)/c.length;
+        var d=hdist(s,{lat:centLat,lng:centLng});
+        if(d<bestD){bestD=d;bestCluster=ci;}
+      });
+      if(allClusters.length)allClusters[bestCluster].push(s);
+      else allClusters.push([s]);
+    });
+  }
+
+  // Step 4: Sort each cluster using nearest-neighbor from depot for best drive order
+  allClusters=allClusters.map(function(cluster){
+    return nnSort(cluster,origin);
+  });
+
+  toast('Zone clustering complete — '+allClusters.length+' route groups');
+  return allClusters.filter(function(c){return c.length>0;});
 }
 
 function geoCluster(items,maxSize,depotGeo){
