@@ -1581,38 +1581,68 @@ function nnSort(stops,origin){
   return ord;
 }
 async function optimiseQuickRouteStops(stops,startGeo){
-  // Quick Route version - no depot return, just best order start to end
+  // Quick Route - zone-aware sort then Google Directions optimisation
   if(!stops.length)return stops;
-  if(!S.gmReady)return nnSort(stops,startGeo);
-  var origin=startGeo
-    ?new google.maps.LatLng(startGeo.lat,startGeo.lng)
-    :new google.maps.LatLng(stops[0].lat,stops[0].lng);
-  var stopsForRoute=startGeo?stops:stops.slice(1);
-  var destination=new google.maps.LatLng(stops[stops.length-1].lat,stops[stops.length-1].lng);
-  if(stopsForRoute.length===0)return stops;
+
+  // Step 1: Sort stops into geographic zones relative to start point or centroid
+  var origin=startGeo||{lat:stops.reduce(function(s,x){return s+x.lat;},0)/stops.length,
+                        lng:stops.reduce(function(s,x){return s+x.lng;},0)/stops.length};
+
+  // Split into quadrants
+  var NW=[],NE=[],SW=[],SE=[];
+  stops.forEach(function(s){
+    var isN=s.lat>origin.lat,isE=s.lng>origin.lng;
+    if(isN&&!isE)NW.push(s);
+    else if(isN&&isE)NE.push(s);
+    else if(!isN&&!isE)SW.push(s);
+    else SE.push(s);
+  });
+
+  // Step 2: Order quadrants by driving logic — start from nearest quadrant
+  // Find which quadrant is closest to start point
+  var quadrants=[NW,NE,SW,SE].filter(function(q){return q.length>0;});
+  quadrants.sort(function(a,b){
+    var centA={lat:a.reduce(function(s,x){return s+x.lat;},0)/a.length,lng:a.reduce(function(s,x){return s+x.lng;},0)/a.length};
+    var centB={lat:b.reduce(function(s,x){return s+x.lat;},0)/b.length,lng:b.reduce(function(s,x){return s+x.lng;},0)/b.length};
+    return hdist(origin,centA)-hdist(origin,centB);
+  });
+
+  // Step 3: Within each quadrant sort by NN from entry point
+  var zoneSorted=[];
+  var curPos=origin;
+  quadrants.forEach(function(q){
+    var sorted=nnSort(q,curPos);
+    zoneSorted=zoneSorted.concat(sorted);
+    if(sorted.length)curPos={lat:sorted[sorted.length-1].lat,lng:sorted[sorted.length-1].lng};
+  });
+
+  // Step 4: Pass zone-sorted stops to Google Directions for final optimisation
+  if(!S.gmReady)return zoneSorted;
   return new Promise(function(resolve){
-    new google.maps.DirectionsService().route({
-      origin:origin,
-      destination:destination,
-      waypoints:stopsForRoute.slice(0,stopsForRoute.length-1).map(function(s){
-        return{location:new google.maps.LatLng(s.lat,s.lng),stopover:true};
-      }),
+    var svc=new google.maps.DirectionsService();
+    var origin2=startGeo
+      ?new google.maps.LatLng(startGeo.lat,startGeo.lng)
+      :new google.maps.LatLng(zoneSorted[0].lat,zoneSorted[0].lng);
+    var dest=new google.maps.LatLng(zoneSorted[zoneSorted.length-1].lat,zoneSorted[zoneSorted.length-1].lng);
+    var waypoints=zoneSorted.slice(startGeo?0:1,zoneSorted.length-1).map(function(s){
+      return{location:new google.maps.LatLng(s.lat,s.lng),stopover:true};
+    });
+    if(!waypoints.length){resolve(zoneSorted);return;}
+    svc.route({
+      origin:origin2,destination:dest,waypoints:waypoints,
       optimizeWaypoints:true,
       travelMode:google.maps.TravelMode.DRIVING,
       drivingOptions:{departureTime:new Date(new Date().setHours(7,0,0,0)),trafficModel:google.maps.TrafficModel.BEST_GUESS}
     },function(result,status){
       if(status==='OK'&&result.routes[0]){
         var order=result.routes[0].waypoint_order;
-        var waypoints=stopsForRoute.slice(0,stopsForRoute.length-1);
-        var reordered=order.map(function(i){return waypoints[i];});
-        var finalStop=stopsForRoute[stopsForRoute.length-1];
-        var allOrdered=startGeo
-          ?reordered.concat([finalStop])
-          :stops.slice(0,1).concat(reordered).concat([finalStop]);
-        resolve(allOrdered);
+        var mid=zoneSorted.slice(startGeo?0:1,zoneSorted.length-1);
+        var reordered=order.map(function(i){return mid[i];});
+        var first=startGeo?[]:zoneSorted.slice(0,1);
+        var last=zoneSorted.slice(zoneSorted.length-1);
+        resolve(first.concat(reordered).concat(last));
       } else {
-        console.warn('Quick Route Directions failed:',status,'- using NN');
-        resolve(nnSort(stops,startGeo));
+        resolve(zoneSorted); // Fallback to zone-sorted order
       }
     });
   });
