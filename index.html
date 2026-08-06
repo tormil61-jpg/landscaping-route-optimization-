@@ -346,6 +346,7 @@ textarea{resize:vertical;min-height:60px}
   <div class="ni on" onclick="showPage('cal',this)">📅 Monthly Schedule</div>
   <div class="ni" onclick="showPage('maps',this)">🗺 Route Maps</div>
   <div class="ni" onclick="showPage('quickroute',this)">⚡ Quick Route</div>
+  <div class="ni" onclick="showPage('recovery',this)">🔁 Service Recovery</div>
   <div class="ni" onclick="showPage('duesoon',this)">⏰ Due Soon</div>
   <div class="nsec">Management</div>
   <div class="ni" onclick="showPage('depts',this)">🏢 Departments</div>
@@ -451,6 +452,43 @@ textarea{resize:vertical;min-height:60px}
             Enter addresses and click Get Route
           </div>
           <div id="qrDirPanel" style="display:none;margin-top:10px;background:#fff;border:1px solid #E2E5EA;border-radius:8px;padding:10px;max-height:200px;overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SERVICE RECOVERY -->
+    <div class="page" id="page-recovery">
+      <div class="phdr">
+        <div><h1>🔁 Service Recovery</h1><p>Find any client and schedule a go back visit</p></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div>
+          <div class="fg">
+            <label class="fl">Search by address or nickname</label>
+            <div style="display:flex;gap:6px">
+              <input type="text" id="recoverySearch" placeholder="e.g. Smith Residence or 704 Baerwald Rd" style="flex:1" oninput="searchRecovery()">
+              <button class="btn2 bsm" onclick="searchRecovery()">🔍 Search</button>
+            </div>
+          </div>
+          <div id="recoveryResults" style="margin-top:8px"></div>
+        </div>
+        <div id="recoveryDetail" style="display:none">
+          <div style="font-size:11px;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Service History</div>
+          <div id="recoveryHistory" style="margin-bottom:12px"></div>
+          <div style="border-top:1px solid #E5E7EB;padding-top:12px">
+            <div style="font-size:11px;font-weight:700;color:#DC2626;text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Schedule Go Back</div>
+            <div id="recoveryEligible" style="font-size:11px;color:#374151;margin-bottom:8px"></div>
+            <div class="fg">
+              <label class="fl">Preferred Date (optional)</label>
+              <input type="date" id="recoveryDate">
+              <div style="font-size:10px;color:#6b7280;margin-top:2px">Leave blank for next available day for that driver</div>
+            </div>
+            <div class="fg">
+              <label class="fl">Reason</label>
+              <input type="text" id="recoveryReason" placeholder="e.g. Customer not satisfied, area missed">
+            </div>
+            <button class="btn" style="background:#DC2626;border-color:#DC2626;width:100%" onclick="scheduleRecovery()">↩ Schedule Go Back</button>
+          </div>
         </div>
       </div>
     </div>
@@ -865,6 +903,8 @@ function loginSuccess(u){
   });
   var tb=document.getElementById('topbarUser');if(tb)tb.textContent=u.name;
   toast('Welcome to A+ Route, '+u.name,'ok');
+  // Auto-mark previous days done on next login
+  setTimeout(autoMarkPreviousDone, 4000);
 }
 
 function doLogout(){
@@ -2850,6 +2890,143 @@ function loadGMaps(){
 }
 window.gmLoaded=function(){S.gmReady=true;};
 function viewMapDate(ds){document.getElementById('mapDate').value=ds;showPage('maps',null);setTimeout(renderMaps,200);}
+
+// ═══════════════════════════════════════
+// AUTO MARK DONE — runs on login
+// ═══════════════════════════════════════
+async function autoMarkPreviousDone(){
+  var today=new Date().toISOString().split('T')[0];
+  var overdue=S.stops.filter(function(s){
+    return s.status==='pending'&&s.scheduled_date&&s.scheduled_date<today;
+  });
+  if(!overdue.length)return;
+  toast('Auto-completing '+overdue.length+' stops from previous days...');
+  for(var i=0;i<overdue.length;i++){
+    var s=overdue[i];
+    await dbPatch('route_stops','id=eq.'+s.id,{status:'completed'});
+    s.status='completed';
+    await saveStopToHistory(s);
+  }
+  renderCalendar();renderStatusBar();
+  toast('Auto-completed '+overdue.length+' previous stops. Follow-ups created.','ok');
+}
+
+// ═══════════════════════════════════════
+// SERVICE RECOVERY
+// ═══════════════════════════════════════
+var R={selectedStop:null,eligibleDrivers:[]};
+
+function initRecoverySearch(){
+  document.getElementById('recoverySearch').value='';
+  document.getElementById('recoveryResults').innerHTML='<div style="font-size:12px;color:#9CA3AF">Search for a client above to see their service history</div>';
+  document.getElementById('recoveryDetail').style.display='none';
+}
+
+async function searchRecovery(){
+  var q=document.getElementById('recoverySearch').value.trim().toLowerCase();
+  if(q.length<2)return;
+  var results=await dbGet('route_stops','&or=(address.ilike.*'+encodeURIComponent(q)+'*,nickname.ilike.*'+encodeURIComponent(q)+'*)&order=scheduled_date.desc&limit=20');
+  if(!results||!results.length){
+    document.getElementById('recoveryResults').innerHTML='<div style="font-size:12px;color:#9CA3AF">No clients found matching "'+q+'"</div>';
+    return;
+  }
+  var byAddr={};
+  results.forEach(function(s){
+    var key=s.address;
+    if(!byAddr[key])byAddr[key]={address:s.address,nickname:s.nickname,stops:[]};
+    byAddr[key].stops.push(s);
+  });
+  var html=Object.values(byAddr).map(function(c){
+    var latest=c.stops[0];
+    var drv=S.drvs.find(function(d){return d.id===latest.driver_id;});
+    return'<div style="padding:10px;border:1.5px solid #E2E5EA;border-radius:6px;margin-bottom:6px;cursor:pointer;background:#fff" onclick="selectRecoveryClient(this)" data-client="'+encodeURIComponent(JSON.stringify(c))+'">'
+      +'<div style="font-size:12px;font-weight:700">'+(c.nickname?'<span style="color:#2D6A4F">'+c.nickname+'</span> — ':'')+c.address+'</div>'
+      +'<div style="font-size:10px;color:#6b7280;margin-top:2px">Last service: '+latest.scheduled_date+' · Driver: '+(drv?drv.name:'?')+' · '+c.stops.length+' visit'+(c.stops.length!==1?'s':'')+'</div>'
+      +'</div>';
+  }).join('');
+  document.getElementById('recoveryResults').innerHTML=html;
+}
+
+function selectRecoveryClient(el){
+  var client=JSON.parse(decodeURIComponent(el.dataset.client));
+  R.selectedStop=client.stops[0];
+  var histHtml=client.stops.slice(0,5).map(function(s){
+    var drv=S.drvs.find(function(d){return d.id===s.driver_id;});
+    var svc=S.svcs.find(function(x){return x.id===s.service_type_id;});
+    var col=s.status==='completed'?'#059669':s.status==='missed'?'#DC2626':'#D97706';
+    return'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #F3F4F6;font-size:11px">'
+      +'<div><strong>'+s.scheduled_date+'</strong> · '+(drv?drv.name:'?')+' · '+(svc?svc.name:s.notes||'?')+'</div>'
+      +'<div style="color:'+col+';font-weight:700">'+s.status.toUpperCase()+'</div></div>';
+  }).join('');
+  document.getElementById('recoveryHistory').innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:6px">'+(client.nickname||client.address)+'</div>'+histHtml;
+  var latest=client.stops[0];
+  var svc=S.svcs.find(function(x){return x.id===latest.service_type_id;});
+  var svcCode=svc?svc.code||svc.name:(latest.notes?latest.notes.split(' ')[0]:'');
+  R.eligibleDrivers=S.drvs.filter(function(d){
+    var codes=(d.service_type_codes||[]).map(function(c){return c.toUpperCase();});
+    return svcCode&&codes.includes(svcCode.toUpperCase());
+  });
+  document.getElementById('recoveryEligible').innerHTML=
+    '<strong>Service:</strong> '+svcCode+'<br>'
+    +'<strong>Eligible drivers:</strong> '+(R.eligibleDrivers.length?R.eligibleDrivers.map(function(d){return d.name;}).join(', '):'None found');
+  document.getElementById('recoveryDate').value='';
+  document.getElementById('recoveryReason').value='';
+  document.getElementById('recoveryDetail').style.display='block';
+}
+
+async function scheduleRecovery(){
+  if(!R.selectedStop){toast('Select a client first','err');return;}
+  if(!R.eligibleDrivers.length){toast('No eligible drivers for this service type','err');return;}
+  var s=R.selectedStop;
+  var prefDate=document.getElementById('recoveryDate').value;
+  var reason=document.getElementById('recoveryReason').value.trim();
+  var targetDriver=null;var targetDate=null;
+  if(prefDate){
+    var bestCnt=-1;
+    R.eligibleDrivers.forEach(function(d){
+      var cnt=S.stops.filter(function(x){return x.driver_id===d.id&&x.scheduled_date===prefDate&&x.status==='pending';}).length;
+      if(cnt>bestCnt){bestCnt=cnt;targetDriver=d;}
+    });
+    targetDate=prefDate;
+  } else {
+    var futureWorkDates=getWorkDates(30,new Date().toISOString().split('T')[0],true);
+    for(var i=0;i<futureWorkDates.length;i++){
+      var dt=futureWorkDates[i];
+      var bestD=null;var bestC=999;
+      R.eligibleDrivers.forEach(function(d){
+        var cnt=S.stops.filter(function(x){return x.driver_id===d.id&&x.scheduled_date===dt&&x.status==='pending';}).length;
+        var lim=S.limMap[d.id]||d.daily_stop_limit||15;
+        if(cnt<lim&&cnt<bestC){bestC=cnt;bestD=d;}
+      });
+      if(bestD){targetDriver=bestD;targetDate=dt;break;}
+    }
+  }
+  if(!targetDriver||!targetDate){toast('No available slot. Try setting a specific date.','err');return;}
+  var cnt=S.stops.filter(function(x){return x.driver_id===targetDriver.id&&x.scheduled_date===targetDate;}).length;
+  var newStop=await dbInsert('route_stops',{
+    driver_id:targetDriver.id,address:s.address,lat:s.lat,lng:s.lng,
+    nickname:s.nickname||null,property_type:s.property_type||'unknown',
+    scheduled_date:targetDate,day_of_week:dayName(targetDate),
+    stop_order:cnt+1,status:'pending',service_type_id:s.service_type_id||null,
+    notes:(s.notes||'')+' | ↩ Go Back'+(reason?' — '+reason:''),
+    sqft:s.sqft||null,owner_id:ownerId()
+  });
+  if(newStop&&newStop[0]){
+    S.stops.push(newStop[0]);
+    var targetM=new Date(targetDate+'T12:00:00');
+    if(targetM.getFullYear()!==S.calY||targetM.getMonth()!==S.calM){
+      S.calY=targetM.getFullYear();S.calM=targetM.getMonth();
+      await loadMonthStops();
+    }
+    renderCalendar();renderStatusBar();
+    toast('Go Back scheduled for '+targetDate+' with '+targetDriver.name,'ok');
+    document.getElementById('recoveryDetail').style.display='none';
+    document.getElementById('recoveryResults').innerHTML='<div style="font-size:12px;color:#059669;font-weight:600">✓ Go Back scheduled for '+targetDate+' with '+targetDriver.name+'</div>';
+  } else {
+    toast('Error scheduling Go Back','err');
+  }
+}
+
 function renderMaps(){
   if(!S.gmReady){setTimeout(renderMaps,400);return;}
   document.getElementById('dirPanel').style.display='none';
@@ -3029,11 +3206,12 @@ function showPage(name,el){
   document.querySelectorAll('.ni').forEach(function(i){i.classList.remove('on');});
   document.getElementById('page-'+name).classList.add('on');
   if(el)el.classList.add('on');
-  var titles={cal:'Monthly Schedule',maps:'Route Maps',quickroute:'Quick Route',duesoon:'Due Soon',depts:'Departments',drvs:'Drivers',clients:'Clients & History'};
+  var titles={cal:'Monthly Schedule',maps:'Route Maps',quickroute:'Quick Route',recovery:'Service Recovery',duesoon:'Due Soon',depts:'Departments',drvs:'Drivers',clients:'Clients & History'};
   document.getElementById('pageTitle').textContent=titles[name]||name;
   if(name==='cal')renderCalendar();
   if(name==='maps'){document.getElementById('mapDate').value=S.selDate||new Date().toISOString().split('T')[0];renderMaps();}
   if(name==='quickroute'){if(!S.gmReady)loadGMaps();}
+  if(name==='recovery'){initRecoverySearch();}
   if(name==='drvs')renderDrvTable();
   if(name==='depts')renderDeptCards();
   if(name==='clients'){renderClientTbl();populateSelects();}
