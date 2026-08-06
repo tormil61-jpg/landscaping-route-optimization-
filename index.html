@@ -721,8 +721,14 @@ textarea{resize:vertical;min-height:60px}
 </div>
 
 <div class="mo" id="clearRoutesMo">
-  <div class="modal" style="width:420px">
+  <div class="modal" style="width:440px">
     <h2>🗑 Clear Routes</h2>
+    <div class="fg">
+      <label class="fl">Driver</label>
+      <select id="clearDrvSelect">
+        <option value="all">All Drivers</option>
+      </select>
+    </div>
     <p style="font-size:13px;color:#374151;margin-bottom:14px">What do you want to clear?</p>
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
       <button class="btn" id="clearDayBtn" onclick="doClearRoutes('day')" style="background:#DC2626;border-color:#DC2626;text-align:left;padding:12px 16px">
@@ -1619,13 +1625,18 @@ async function confirmGoBack(){
   }
 }
 function clearScheduledRoutes(){
+  // Populate driver dropdown
+  var sel=document.getElementById('clearDrvSelect');
+  sel.innerHTML='<option value="all">All Drivers</option>'
+    +S.drvs.map(function(d){return'<option value="'+d.id+'">'+d.name+'</option>';}).join('');
+
   // Update modal labels
   var dayBtn=document.getElementById('clearDayBtn');
   var dayLabel=document.getElementById('clearDayLabel');
   var monthLabel=document.getElementById('clearMonthLabel');
   if(S.selDate){
     dayBtn.style.opacity='1';dayBtn.disabled=false;
-    dayLabel.textContent='Clear all pending stops on '+S.selDate;
+    dayLabel.textContent='Clear pending stops on '+S.selDate;
   } else {
     dayBtn.style.opacity='.5';dayBtn.disabled=true;
     dayLabel.textContent='Select a day on the calendar first';
@@ -1637,23 +1648,32 @@ function clearScheduledRoutes(){
 
 async function doClearRoutes(mode){
   var start,end,label;
+  var drvId=document.getElementById('clearDrvSelect').value;
+  var drv=S.drvs.find(function(d){return d.id===drvId;});
+  var drvLabel=drv?drv.name:'All Drivers';
+
   if(mode==='day'){
     if(!S.selDate){toast('Select a day first','err');return;}
     start=S.selDate;end=S.selDate;
-    label='stops on '+S.selDate;
+    label=drvLabel+' stops on '+S.selDate;
   } else {
     start=new Date(S.calY,S.calM,1).toISOString().split('T')[0];
     end=new Date(S.calY,S.calM+1,0).toISOString().split('T')[0];
-    label='all pending stops for '+new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
+    label=drvLabel+' pending stops for '+new Date(S.calY,S.calM,1).toLocaleDateString('en-CA',{month:'long',year:'numeric'});
   }
   closeModal('clearRoutesMo');
   toast('Clearing...');
-  var r=await fetch(SUPA+'/rest/v1/route_stops?status=eq.pending&scheduled_date=gte.'+start+'&scheduled_date=lte.'+end,{
+
+  // Build query with optional driver filter
+  var drvFilter=drvId!=='all'?'&driver_id=eq.'+drvId:'';
+  var r=await fetch(SUPA+'/rest/v1/route_stops?status=eq.pending&scheduled_date=gte.'+start+'&scheduled_date=lte.'+end+drvFilter,{
     method:'DELETE',headers:H
   });
   if(r.ok){
     S.stops=S.stops.filter(function(s){
-      return!(s.status==='pending'&&s.scheduled_date>=start&&s.scheduled_date<=end);
+      var inRange=s.status==='pending'&&s.scheduled_date>=start&&s.scheduled_date<=end;
+      var matchesDrv=drvId==='all'||s.driver_id===drvId;
+      return!(inRange&&matchesDrv);
     });
     S.selDate=null;
     renderCalendar();renderStatusBar();
