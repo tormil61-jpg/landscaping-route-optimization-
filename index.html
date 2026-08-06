@@ -644,6 +644,44 @@ textarea{resize:vertical;min-height:60px}
   </div>
 </div>
 
+<!-- GO BACK MODAL -->
+<div class="mo" id="goBackMo">
+  <div class="modal" style="width:480px">
+    <h2>↩ Go Back</h2>
+    <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#DC2626">
+      Schedule a return visit because the service needs to be redone.
+    </div>
+    <div id="goBackAddr" style="font-size:12px;font-weight:600;padding:8px 10px;background:#F9FAFB;border-radius:5px;margin-bottom:12px"></div>
+    <div class="fg">
+      <label class="fl">Service Type</label>
+      <div id="goBackSvcLabel" style="font-size:11px;color:#374151;padding:5px 0"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Eligible Drivers</label>
+      <div id="goBackDrivers" style="font-size:11px;color:#2D6A4F;margin-bottom:8px"></div>
+    </div>
+    <div class="fg">
+      <label class="fl">Best Available Slot (within 48 hrs)</label>
+      <div id="goBackSlot" style="font-size:12px;padding:8px 10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:5px;margin-bottom:4px"></div>
+      <div style="font-size:10px;color:#6b7280">Finds nearest route day where driver already has stops nearby.</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Override Date (optional)</label>
+      <input type="date" id="goBackDate">
+      <div style="font-size:10px;color:#6b7280;margin-top:2px">Leave blank to use best available slot above.</div>
+    </div>
+    <div class="fg">
+      <label class="fl">Reason (optional)</label>
+      <input type="text" id="goBackReason" placeholder="e.g. Customer complained, missed area, wrong product">
+    </div>
+    <input type="hidden" id="goBackStopId">
+    <div class="mfoot">
+      <button class="btn2" onclick="closeModal('goBackMo')">Cancel</button>
+      <button class="btn" style="background:#DC2626;border-color:#DC2626" onclick="confirmGoBack()">↩ Schedule Go Back</button>
+    </div>
+  </div>
+</div>
+
 <div class="mo" id="clearRoutesMo">
   <div class="modal" style="width:420px">
     <h2>🗑 Clear Routes</h2>
@@ -1288,6 +1326,7 @@ function renderDayPanel(ds){
         html+='<div class="sacts">';
         if(!isC)html+='<button class="btns" data-a="markDone" data-sid="'+s.id+'">✓ Done</button>';
         else html+='<button class="btn2 bsm" data-a="undoDone" data-sid="'+s.id+'">Undo</button>';
+        if(isC)html+='<button class="btn2 bsm" data-a="goBack" data-sid="'+s.id+'" style="background:#FEF2F2;color:#DC2626;border-color:#FECACA">↩ Go Back</button>';
         if(!isC)html+='<button class="btnw" data-a="markMiss" data-sid="'+s.id+'">Miss</button>';
         html+='<button class="btn2 bsm" data-a="reassign" data-sid="'+s.id+'" data-ds="'+ds+'" data-addr="'+encodeURIComponent(s.address)+'">Move</button>';
         html+='<button class="btnd" data-a="delStop" data-sid="'+s.id+'">x</button></div></div>';
@@ -1307,6 +1346,7 @@ function renderDayPanel(ds){
     else if(a==='undoDone')undoDone(sid);
     else if(a==='markMiss')markMiss(sid);
     else if(a==='delStop')delStop(sid);
+    else if(a==='goBack'){openGoBack(sid);}
     else if(a==='reassign'){openReassign(sid,decodeURIComponent(btn.dataset.addr||''),S.selDate);}
     else if(a==='markAllDone')markAllDone(drvid,bds);
     else if(a==='dlRoute')dlRoute(drvid,bds);
@@ -1412,6 +1452,132 @@ async function dropStop(e,targetId){
 // ═══════════════════════════════════════
 // GEOCODE + OPTIMISE
 // ═══════════════════════════════════════
+function openGoBack(sid){
+  var s=S.stops.find(function(x){return x.id===sid;});
+  if(!s)return;
+  var svc=S.svcs.find(function(x){return x.id===s.service_type_id;});
+  var svcCodes=svc?[svc.code||svc.name]:(s.notes?[s.notes.split(' ')[0]]:[]);
+
+  // Find eligible drivers — must have matching service type code
+  var eligible=S.drvs.filter(function(d){
+    var codes=(d.service_type_codes||[]).map(function(c){return c.toUpperCase();});
+    return svcCodes.some(function(c){return codes.includes(c.toUpperCase());});
+  });
+
+  // Find best slot within 48 hours for each eligible driver
+  var now=new Date();
+  var deadline=new Date(now.getTime()+48*60*60*1000);
+  var bestSlot=null;var bestDriver=null;var bestScore=Infinity;
+
+  eligible.forEach(function(d){
+    // Get work dates in next 48 hours
+    var slots=getWorkDates(5,now.toISOString().split('T')[0],true).filter(function(dt){
+      return new Date(dt+'T23:59:59')<=deadline;
+    });
+    slots.forEach(function(dt){
+      var dayStops=S.stops.filter(function(x){return x.driver_id===d.id&&x.scheduled_date===dt&&x.status==='pending';});
+      if(dayStops.length===0)return;
+      // Check if any stop on this day is near this address
+      var nearCount=dayStops.filter(function(x){
+        if(!x.lat||!x.lng||!s.lat||!s.lng)return false;
+        return hdist({lat:s.lat,lng:s.lng},{lat:x.lat,lng:x.lng})<15; // within ~15km
+      }).length;
+      var score=dayStops.length-nearCount*5; // prefer days with nearby stops
+      if(nearCount>0&&score<bestScore){
+        bestScore=score;bestSlot=dt;bestDriver=d;
+      }
+    });
+  });
+
+  // If no nearby slot found, use next available day within 48hrs
+  if(!bestSlot&&eligible.length){
+    var d=eligible[0];
+    var slots=getWorkDates(5,now.toISOString().split('T')[0],true).filter(function(dt){
+      return new Date(dt+'T23:59:59')<=deadline;
+    });
+    if(slots.length){bestSlot=slots[0];bestDriver=d;}
+  }
+
+  // Populate modal
+  document.getElementById('goBackStopId').value=sid;
+  document.getElementById('goBackAddr').textContent=(s.nickname?s.nickname+' — ':'')+s.address;
+  document.getElementById('goBackSvcLabel').textContent=svcCodes.join(', ')||'Unknown';
+  document.getElementById('goBackDrivers').textContent=eligible.length
+    ?eligible.map(function(d){return d.name;}).join(', ')
+    :'No eligible drivers found for this service type';
+  document.getElementById('goBackSlot').textContent=bestSlot&&bestDriver
+    ?bestDriver.name+' on '+bestSlot+(bestScore<0?' — nearby stops in area':'')
+    :'No available slot within 48 hours — use Override Date below';
+  document.getElementById('goBackDate').value='';
+  document.getElementById('goBackReason').value='';
+
+  // Store for confirmGoBack
+  window._goBackDriver=bestDriver;
+  window._goBackSlot=bestSlot;
+  window._goBackEligible=eligible;
+
+  openModal('goBackMo');
+}
+
+async function confirmGoBack(){
+  var sid=document.getElementById('goBackStopId').value;
+  var s=S.stops.find(function(x){return x.id===sid;});
+  if(!s)return;
+
+  var overrideDate=document.getElementById('goBackDate').value;
+  var reason=document.getElementById('goBackReason').value.trim();
+  var targetDate=overrideDate||window._goBackSlot;
+  var targetDriver=window._goBackDriver||(window._goBackEligible&&window._goBackEligible[0]);
+
+  if(!targetDate){toast('No date available. Use Override Date to set one.','err');return;}
+  if(!targetDriver){toast('No eligible driver found for this service type.','err');return;}
+
+  // If override date set, check eligible drivers for that day
+  if(overrideDate&&window._goBackEligible&&window._goBackEligible.length){
+    // Find best eligible driver for override date — prefer one already working that day
+    var bestDrv=null;var bestCnt=-1;
+    window._goBackEligible.forEach(function(d){
+      var cnt=S.stops.filter(function(x){return x.driver_id===d.id&&x.scheduled_date===overrideDate&&x.status==='pending';}).length;
+      if(cnt>bestCnt){bestCnt=cnt;bestDrv=d;}
+    });
+    targetDriver=bestDrv||targetDriver;
+  }
+
+  // Get current stop count for that driver on that day
+  var cnt=S.stops.filter(function(x){return x.driver_id===targetDriver.id&&x.scheduled_date===targetDate;}).length;
+
+  // Insert Go Back stop
+  var newStop=await dbInsert('route_stops',{
+    driver_id:targetDriver.id,
+    address:s.address,
+    lat:s.lat,lng:s.lng,
+    nickname:s.nickname||null,
+    property_type:s.property_type||'unknown',
+    scheduled_date:targetDate,
+    day_of_week:dayName(targetDate),
+    stop_order:cnt+1,
+    status:'pending',
+    service_type_id:s.service_type_id||null,
+    notes:(s.notes||'')+(reason?' | Go Back: '+reason:' | Go Back'),
+    sqft:s.sqft||null,
+    owner_id:ownerId()
+  });
+
+  if(newStop&&newStop[0]){
+    S.stops.push(newStop[0]);
+    // Navigate to that month
+    var targetM=new Date(targetDate+'T12:00:00');
+    if(targetM.getFullYear()!==S.calY||targetM.getMonth()!==S.calM){
+      S.calY=targetM.getFullYear();S.calM=targetM.getMonth();
+      await loadMonthStops();
+    }
+    renderCalendar();renderStatusBar();
+    closeModal('goBackMo');
+    toast('Go Back scheduled for '+targetDate+' with '+targetDriver.name,'ok');
+  } else {
+    toast('Error scheduling Go Back','err');
+  }
+}
 function clearScheduledRoutes(){
   // Update modal labels
   var dayBtn=document.getElementById('clearDayBtn');
@@ -1912,14 +2078,23 @@ async function doImport(){
   toast('Geocoding '+items.length+' addresses... This may take a few minutes.');
 
   // Step 1: Geocode all
-  var geocoded=0;
+  var geocoded=0;var skipped=[];
   for(var i=0;i<items.length;i++){
     var g=await geocodeAddr(items[i].address,deptId);
     if(g){items[i].lat=g.lat;items[i].lng=g.lng;geocoded++;}
+    else{skipped.push(items[i].address);}
     await sleep(120);
-    if((i+1)%20===0)toast('Geocoding... '+(i+1)+'/'+items.length);
+    if((i+1)%10===0)toast('Geocoding... '+(i+1)+'/'+items.length+' ('+(items.length-i-1)+' remaining)');
   }
-  toast('Geocoded '+geocoded+'/'+items.length+'. Building schedule...');
+
+  // Show clear summary of what was found and what was skipped
+  if(skipped.length){
+    var msg='⚠ '+geocoded+' of '+items.length+' addresses geocoded. '+skipped.length+' not found:\n'+skipped.slice(0,5).join('\n')+(skipped.length>5?'\n...and '+(skipped.length-5)+' more':'');
+    alert(msg);
+    toast(geocoded+' geocoded, '+skipped.length+' skipped — check the alert for details');
+  } else {
+    toast('All '+geocoded+' addresses geocoded. Building schedule...');
+  }
 
   // Step 2: Cluster ALL geocoded stops together geographically first
   // Then split clusters between drivers so each driver gets a tight geographic area per day
