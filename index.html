@@ -1370,10 +1370,7 @@ function renderDayPanel(ds){
         if(isC)html+='<span class="b bd">Done</span>';
         if(isM)html+='<span class="b bm">Miss</span>';
         html+='<div class="sacts">';
-        if(!isC)html+='<button class="btns" data-a="markDone" data-sid="'+s.id+'">✓ Done</button>';
-        else html+='<button class="btn2 bsm" data-a="undoDone" data-sid="'+s.id+'">Undo</button>';
-        if(isC)html+='<button class="btn2 bsm" data-a="goBack" data-sid="'+s.id+'" style="background:#FEF2F2;color:#DC2626;border-color:#FECACA">↩ Go Back</button>';
-        if(!isC)html+='<button class="btnw" data-a="markMiss" data-sid="'+s.id+'">Miss</button>';
+        if(!isC&&!isM)html+='<button class="btnw" data-a="markMiss" data-sid="'+s.id+'">Miss</button>';
         html+='<button class="btn2 bsm" data-a="reassign" data-sid="'+s.id+'" data-ds="'+ds+'" data-addr="'+encodeURIComponent(s.address)+'">Move</button>';
         html+='<button class="btnd" data-a="delStop" data-sid="'+s.id+'">x</button></div></div>';
       });
