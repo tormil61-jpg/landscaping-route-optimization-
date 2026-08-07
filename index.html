@@ -1779,7 +1779,17 @@ async function geocodeAddr(addr,deptId){
     if(!/,\s*[A-Za-z]{2,}/.test(full))full+=', '+getCityState(deptId);
     var r=await fetch('https://maps.googleapis.com/maps/api/geocode/json?address='+encodeURIComponent(full)+'&key='+GKEY);
     var d=await r.json();
-    if(d.status==='OK'&&d.results&&d.results.length){var l=d.results[0].geometry.location;return{lat:l.lat,lng:l.lng};}
+    if(d.status==='OK'&&d.results&&d.results.length){
+      var res=d.results[0];
+      var l=res.geometry.location;
+      var types=res.types||[];
+      // Detect commercial vs residential using Google types
+      var isCommercial=types.some(function(t){
+        return['establishment','point_of_interest','store','premise','university','hospital','school','church','lodging','food'].includes(t);
+      });
+      var propType=isCommercial?'commercial':'residential';
+      return{lat:l.lat,lng:l.lng,propType:propType};
+    }
   }catch(e){console.error('geocode error',addr,e);}
   return null;
 }
@@ -2138,7 +2148,7 @@ async function doImport(){
   var geocoded=0;var skipped=[];
   for(var i=0;i<items.length;i++){
     var g=await geocodeAddr(items[i].address,deptId);
-    if(g){items[i].lat=g.lat;items[i].lng=g.lng;geocoded++;}
+    if(g){items[i].lat=g.lat;items[i].lng=g.lng;items[i].propType=g.propType||'residential';geocoded++;}
     else{skipped.push(items[i].address);}
     await sleep(120);
     if((i+1)%10===0)toast('Geocoding... '+(i+1)+'/'+items.length+' ('+(items.length-i-1)+' remaining)');
@@ -2187,42 +2197,62 @@ async function doImport(){
     allClusters=geoClusterSqft(svcFiltered,minLim,depotGeo);
   } else if(S.gmReady&&svcFiltered.length>5){
     allClusters=await driveTimeCluster(svcFiltered,30,depotGeo);
-    // Respect daily limit — split clusters larger than minLim
-    var splitClusters=[];
-    allClusters.forEach(function(c){
-      for(var i=0;i<c.length;i+=minLim)splitClusters.push(c.slice(i,i+minLim));
-    });
-    allClusters=splitClusters;
   } else {
     allClusters=geoCluster(svcFiltered,minLim,depotGeo);
   }
 
-  // Assign clusters to drivers alternately across work dates
-  // This ensures each driver gets geographically tight clusters on different days
+  // Assign clusters to drivers by zone match
+  // Each driver has a zone (e.g. "North Gainesville FL") — match cluster centroid to closest driver zone
+  // This ensures Kyle (North) gets north clusters, Sam (South) gets south clusters
   var schedule=[];
   var includeFriday=document.getElementById('impIncludeFri')?document.getElementById('impIncludeFri').checked:false;
   var workDates=getWorkDates(90,document.getElementById('impStartDate').value||null,includeFriday);
   var drvDateUsed={};
   selDrvs.forEach(function(d){drvDateUsed[d.id]=new Set();});
 
-  allClusters.forEach(function(cluster,ci){
-    // Alternate drivers: cluster 0 -> driver 0, cluster 1 -> driver 1, cluster 2 -> driver 0...
-    var drv=selDrvs[ci%selDrvs.length];
+  // Pre-compute driver zone centroids relative to depot
+  var depotLat=depotGeo?depotGeo.lat:29.65;
+  var depotLng=depotGeo?depotGeo.lng:-82.33;
+
+  function getBestDriverForCluster(cluster){
+    // Calculate cluster centroid
+    var centLat=cluster.reduce(function(s,x){return s+x.lat;},0)/cluster.length;
+    var centLng=cluster.reduce(function(s,x){return s+x.lng;},0)/cluster.length;
+    var isNorth=centLat>depotLat;
+    var isEast=centLng>depotLng;
+
+    // Try to match driver by zone keyword
+    var zonedDrv=selDrvs.find(function(d){
+      var z=(d.zone||'').toLowerCase();
+      if(isNorth&&z.includes('north'))return true;
+      if(!isNorth&&z.includes('south'))return true;
+      if(isEast&&z.includes('east'))return true;
+      if(!isEast&&z.includes('west'))return true;
+      return false;
+    });
+
+    if(zonedDrv){
+      // Check this driver has capacity left
+      var usedDays=drvDateUsed[zonedDrv.id].size;
+      if(usedDays<workDates.length)return zonedDrv;
+    }
+
+    // Fallback: pick driver with fewest days used
+    return selDrvs.reduce(function(best,d){
+      return drvDateUsed[d.id].size<drvDateUsed[best.id].size?d:best;
+    },selDrvs[0]);
+  }
+
+  allClusters.forEach(function(cluster){
+    var drv=getBestDriverForCluster(cluster);
     var lim=lims[drv.id];
-    // If cluster is bigger than this driver's limit, split it
-    if(cluster.length>lim){
-      for(var start=0;start<cluster.length;start+=lim){
-        var sub=cluster.slice(start,start+lim);
-        var date=workDates.find(function(d){return!drvDateUsed[drv.id].has(d);});
-        if(!date)return;
-        drvDateUsed[drv.id].add(date);
-        schedule.push({drvId:drv.id,date:date,stops:sub});
-      }
-    } else {
+    // Split cluster if bigger than driver's daily limit
+    for(var start=0;start<cluster.length;start+=lim){
+      var sub=cluster.slice(start,start+lim);
       var date=workDates.find(function(d){return!drvDateUsed[drv.id].has(d);});
       if(!date)return;
       drvDateUsed[drv.id].add(date);
-      schedule.push({drvId:drv.id,date:date,stops:cluster});
+      schedule.push({drvId:drv.id,date:date,stops:sub});
     }
   });
 
@@ -2245,7 +2275,7 @@ async function doImport(){
         address:item.address,
         lat:item.lat,
         lng:item.lng,
-        property_type:(item.address.match(/^\d+\s/)?'residential':'commercial'),
+        property_type:item.propType||( item.address.match(/^\d+\s/)?'residential':'commercial'),
         scheduled_date:day.date,
         day_of_week:dayName(day.date),
         stop_order:si+1,
@@ -2336,7 +2366,8 @@ async function driveTimeCluster(items, maxMinutes, depotGeo){
 
   toast('Grouping stops by zone and drive time...');
 
-  // Step 1: Split into quadrants relative to depot
+  // Step 1: Split into quadrants relative to DEPOT (not centroid)
+  // This ensures St Augustine and Gainesville each cluster correctly from their own depot
   var depotLat=origin.lat,depotLng=origin.lng;
   var quadrants={NW:[],NE:[],SW:[],SE:[]};
   items.forEach(function(s){
